@@ -230,7 +230,13 @@ export default function ProfileScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={s.memberName}>{member.name}</Text>
                   <Text style={s.memberPhone}>{member.phone}</Text>
-                  <Text style={s.memberJoined}>{member.joinedAt}</Text>
+                  <Text style={s.memberJoined}>
+                    {member.status === 'pending'
+                      ? `Invited ${new Date(member.invitedAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`
+                      : member.joinedAt
+                        ? `Joined ${new Date(member.joinedAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`
+                        : ''}
+                  </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
                   <View style={[s.rolePill, { backgroundColor: rc.bg }]}>

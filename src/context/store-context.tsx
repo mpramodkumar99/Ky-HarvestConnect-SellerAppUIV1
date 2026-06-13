@@ -1,36 +1,44 @@
 import React, { createContext, useContext, useState } from 'react';
-import type { SellerType } from '@/services/user-api';
+import type { SellerType, ShipsTo, SellerRole, MemberStatus } from '@/services/user-api';
 
-export type StoreRole = 'owner' | 'manager' | 'staff';
+// Re-export so screens can import StoreRole from here without coupling to user-api
+export type { SellerRole as StoreRole };
 
-// Store mirrors the Seller type from UserSvc with UI-only additions.
-// id must match the sellerId used in catalog-svc (e.g. 'seller-101').
+// Store mirrors the Seller type from UserSvc with UI-only additions (category, icon, role, counts).
+// id must match the sellerId used in catalog-svc (e.g. 'seller-112').
 export interface Store {
-  id: string;            // sellerId — matches catalog-svc seed IDs
+  id: string;             // sellerId — matches catalog-svc seed IDs
   name: string;
-  type: SellerType;      // from UserSvc Seller.type
-  category: string;      // human-readable label for UI display
+  type: SellerType;       // from UserSvc Seller.type
+  category: string;       // human-readable label for UI display
   icon: string;
+  description?: string;   // store bio shown in Store Settings
+  imageUrl?: string;      // store logo / photo URL
   location: string;
   phone: string;
   pincode: string;
+  deliveryZones: ShipsTo[]; // seller-level delivery coverage
   verified: boolean;
   fssaiNumber?: string;
-  role: StoreRole;       // this user's role within the seller account
+  role: SellerRole;       // this user's role within the seller account
   memberCount: number;
   productCount: number;
   ordersToday: number;
   revenueToday: string;
 }
 
+// Mirrors SellerMember from UserSvc; avatar is a UI-only addition (initials fallback)
 export interface TeamMember {
   id: string;
+  sellerId: string;
+  userId?: string;
   name: string;
   phone: string;
-  role: StoreRole;
-  status: 'active' | 'pending';
-  avatar: string;
-  joinedAt: string;
+  role: SellerRole;
+  status: MemberStatus;
+  avatar: string;         // UI-only: initials fallback, e.g. 'SR'
+  invitedAt: string;
+  joinedAt?: string;
 }
 
 interface StoreContextValue {
@@ -48,9 +56,11 @@ const STORES: Store[] = [
     type: 'dairy',
     category: 'Dairy & Animal Products',
     icon: '🥛',
+    description: 'Fresh milk, curd and paneer sourced directly from our Armoor farm.',
     location: 'Armoor, Nizamabad',
     phone: '+919000000112',
     pincode: '503111',
+    deliveryZones: ['mandal', 'district'],
     verified: true,
     fssaiNumber: '10019042000112',
     role: 'owner',
@@ -65,9 +75,11 @@ const STORES: Store[] = [
     type: 'homefood',
     category: 'Home Foods & Pickles',
     icon: '🍱',
+    description: 'Traditional Telangana pickles and home-made snacks made with love.',
     location: 'Nizamabad, Telangana',
     phone: '+919000000113',
     pincode: '503001',
+    deliveryZones: ['mandal', 'district', 'state'],
     verified: true,
     fssaiNumber: '10019042000113',
     role: 'owner',
@@ -82,9 +94,11 @@ const STORES: Store[] = [
     type: 'farmer',
     category: 'Vegetables & Spices',
     icon: '🌶️',
+    description: 'Organic turmeric, chillies and seasonal vegetables from Nizamabad district.',
     location: 'Nizamabad, Telangana',
     phone: '+919000000105',
     pincode: '503001',
+    deliveryZones: ['state', 'national'],
     verified: true,
     fssaiNumber: '10019042000105',
     role: 'manager',
@@ -99,79 +113,93 @@ const TEAM: Record<string, TeamMember[]> = {
   'seller-112': [
     {
       id: 'm1',
+      sellerId: 'seller-112',
       name: 'Sridevi Reddy',
-      phone: '+91 98765 43210',
+      phone: '+919876543210',
       role: 'owner',
       status: 'active',
       avatar: 'SR',
-      joinedAt: 'Oct 2023',
+      invitedAt: '2023-10-01T00:00:00.000Z',
+      joinedAt: '2023-10-01T00:00:00.000Z',
     },
     {
       id: 'm2',
+      sellerId: 'seller-112',
       name: 'Ramesh Kumar',
-      phone: '+91 91234 56789',
+      phone: '+919123456789',
       role: 'manager',
       status: 'active',
       avatar: 'RK',
-      joinedAt: 'Jan 2024',
+      invitedAt: '2024-01-10T00:00:00.000Z',
+      joinedAt: '2024-01-12T00:00:00.000Z',
     },
     {
       id: 'm3',
+      sellerId: 'seller-112',
       name: 'Meena Devi',
-      phone: '+91 87654 32109',
+      phone: '+918765432109',
       role: 'staff',
       status: 'pending',
       avatar: 'MD',
-      joinedAt: 'Invited Jun 2026',
+      invitedAt: '2026-06-10T00:00:00.000Z',
     },
   ],
   'seller-113': [
     {
       id: 'm4',
+      sellerId: 'seller-113',
       name: 'Sridevi Reddy',
-      phone: '+91 98765 43210',
+      phone: '+919876543210',
       role: 'owner',
       status: 'active',
       avatar: 'SR',
-      joinedAt: 'Mar 2024',
+      invitedAt: '2024-03-01T00:00:00.000Z',
+      joinedAt: '2024-03-01T00:00:00.000Z',
     },
   ],
   'seller-105': [
     {
       id: 'm5',
+      sellerId: 'seller-105',
       name: 'Priya Sharma',
-      phone: '+91 99887 76655',
+      phone: '+919988776655',
       role: 'owner',
       status: 'active',
       avatar: 'PS',
-      joinedAt: 'Feb 2024',
+      invitedAt: '2024-02-01T00:00:00.000Z',
+      joinedAt: '2024-02-01T00:00:00.000Z',
     },
     {
       id: 'm6',
+      sellerId: 'seller-105',
       name: 'Sridevi Reddy',
-      phone: '+91 98765 43210',
+      phone: '+919876543210',
       role: 'manager',
       status: 'active',
       avatar: 'SR',
-      joinedAt: 'Apr 2024',
+      invitedAt: '2024-04-01T00:00:00.000Z',
+      joinedAt: '2024-04-03T00:00:00.000Z',
     },
     {
       id: 'm7',
+      sellerId: 'seller-105',
       name: 'Venkat Rao',
-      phone: '+91 88990 11223',
+      phone: '+918899011223',
       role: 'staff',
       status: 'active',
       avatar: 'VR',
-      joinedAt: 'May 2024',
+      invitedAt: '2024-05-01T00:00:00.000Z',
+      joinedAt: '2024-05-02T00:00:00.000Z',
     },
     {
       id: 'm8',
+      sellerId: 'seller-105',
       name: 'Sunita Devi',
-      phone: '+91 97531 24680',
+      phone: '+919753124680',
       role: 'staff',
       status: 'pending',
       avatar: 'SD',
-      joinedAt: 'Invited Jun 2026',
+      invitedAt: '2026-06-10T00:00:00.000Z',
     },
   ],
 };
