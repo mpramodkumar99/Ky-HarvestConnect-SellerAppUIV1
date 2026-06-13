@@ -117,8 +117,8 @@ export const COMMON_UNITS = ['kg', '500g', '250g', 'litre', '500ml', 'piece', 'd
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
 
   if (res.status === 204) return undefined as T;

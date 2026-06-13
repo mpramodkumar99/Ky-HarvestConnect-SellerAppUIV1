@@ -83,11 +83,11 @@ export default function ProductsScreen() {
     );
     try {
       await updateProduct(product.id, { status: newStatus }, activeStore.id);
-    } catch {
+    } catch (e: unknown) {
       setProducts((prev) =>
         prev.map((p) => p.id === product.id ? { ...p, status: product.status } : p)
       );
-      Alert.alert('Error', 'Could not update listing status. Is the Catalog service running?');
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not update listing status.');
     }
   }
 
