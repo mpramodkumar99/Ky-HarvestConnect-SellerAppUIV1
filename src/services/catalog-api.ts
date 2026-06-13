@@ -29,6 +29,9 @@ export type SubCategory =
   | 'rentals';
 
 export type ShipsTo = 'mandal' | 'district' | 'state' | 'national';
+export type ProductStatus = 'draft' | 'active' | 'archived';
+
+export const LOW_STOCK_THRESHOLD = 10;
 
 export interface CatalogProduct {
   id: string;
@@ -39,13 +42,16 @@ export interface CatalogProduct {
   price: number;          // paise — divide by 100 for ₹ display
   originalPrice?: number; // paise
   unit: string;
+  stockQuantity: number;  // units available; 0 = out of stock; 9999 for services
   sellerId: string;
   sellerName: string;
   location: string;
-  inStock: boolean;
+  inStock: boolean;       // server-derived: stockQuantity > 0
   isVerified: boolean;    // admin-controlled, read-only from seller perspective
   isHandmade: boolean;
   shipsTo: ShipsTo;
+  images: string[];       // ordered list of image URLs, max 5
+  status: ProductStatus;
   rating: number;
   reviewCount: number;
   createdAt: string;
@@ -53,8 +59,8 @@ export interface CatalogProduct {
 }
 
 // sellerId/sellerName/location are set at creation; not editable after.
-// isVerified is server-managed; not included in either input type.
-export type CreateProductInput = Omit<CatalogProduct, 'id' | 'createdAt' | 'updatedAt' | 'isVerified'>;
+// isVerified and inStock are server-managed; not included in either input type.
+export type CreateProductInput = Omit<CatalogProduct, 'id' | 'createdAt' | 'updatedAt' | 'isVerified' | 'inStock'>;
 export type UpdateProductInput = Partial<Omit<CreateProductInput, 'sellerId' | 'sellerName' | 'location'>>;
 
 // ── Metadata (for form pickers) ───────────────────────────────────────────────
@@ -137,12 +143,14 @@ export async function listProducts(filters?: {
   subCategory?: SubCategory;
   shipsTo?: ShipsTo;
   sellerId?: string;
+  status?: ProductStatus;
 }): Promise<CatalogProduct[]> {
   const params = new URLSearchParams();
   if (filters?.category)    params.set('category',    filters.category);
   if (filters?.subCategory) params.set('subCategory', filters.subCategory);
   if (filters?.shipsTo)     params.set('shipsTo',     filters.shipsTo);
   if (filters?.sellerId)    params.set('sellerId',    filters.sellerId);
+  if (filters?.status)      params.set('status',      filters.status);
 
   const qs = params.toString();
   const result = await request<CatalogProduct[]>(`/v1/products${qs ? `?${qs}` : ''}`);

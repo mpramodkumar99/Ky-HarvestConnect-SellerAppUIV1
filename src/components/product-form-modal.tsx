@@ -6,17 +6,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  CatalogProduct, CreateProductInput, Category, SubCategory,
+  CatalogProduct, CreateProductInput, Category, SubCategory, ProductStatus,
   CATEGORIES, SUB_CATEGORIES_BY_CATEGORY, SHIPS_TO_OPTIONS, COMMON_UNITS,
   createProduct, updateProduct,
 } from '@/services/catalog-api';
 import { useStore } from '@/context/store-context';
 
+const MAX_IMAGES = 5;
+
 interface Props {
   visible: boolean;
   onClose: () => void;
   onSaved: (product: CatalogProduct) => void;
-  editProduct?: CatalogProduct; // if provided → edit mode
+  editProduct?: CatalogProduct;
 }
 
 interface FormState {
@@ -24,11 +26,13 @@ interface FormState {
   description: string;
   category: Category;
   subCategory: SubCategory;
-  priceRupees: string;  // user types rupees, we convert to paise
+  priceRupees: string;
+  stockQuantity: string;
   unit: string;
   shipsTo: 'mandal' | 'district' | 'state' | 'national';
-  inStock: boolean;
   isHandmade: boolean;
+  images: string[];
+  status: 'active' | 'draft';
 }
 
 const defaultForm = (): FormState => ({
@@ -37,10 +41,12 @@ const defaultForm = (): FormState => ({
   category: 'farm_products',
   subCategory: 'grains_staples',
   priceRupees: '',
+  stockQuantity: '',
   unit: 'kg',
   shipsTo: 'district',
-  inStock: true,
   isHandmade: false,
+  images: [],
+  status: 'active',
 });
 
 function formFromProduct(p: CatalogProduct): FormState {
@@ -50,10 +56,12 @@ function formFromProduct(p: CatalogProduct): FormState {
     category: p.category,
     subCategory: p.subCategory,
     priceRupees: String(Math.round(p.price / 100)),
+    stockQuantity: String(p.stockQuantity),
     unit: p.unit,
     shipsTo: p.shipsTo,
-    inStock: p.inStock,
     isHandmade: p.isHandmade,
+    images: p.images ?? [],
+    status: p.status === 'archived' ? 'draft' : p.status,
   };
 }
 
@@ -64,15 +72,16 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
   const [form, setForm] = useState<FormState>(defaultForm());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newImageUrl, setNewImageUrl] = useState('');
 
   useEffect(() => {
     if (visible) {
       setForm(isEdit && editProduct ? formFromProduct(editProduct) : defaultForm());
       setError(null);
+      setNewImageUrl('');
     }
   }, [visible, editProduct]);
 
-  // When category changes, auto-select first valid subcategory
   function setCategory(cat: Category) {
     const firstSub = SUB_CATEGORIES_BY_CATEGORY[cat][0].value;
     setForm((f) => ({ ...f, category: cat, subCategory: firstSub }));
@@ -82,29 +91,49 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function addImage() {
+    const url = newImageUrl.trim();
+    if (!url) return;
+    if (form.images.length >= MAX_IMAGES) {
+      Alert.alert('Limit reached', `You can add up to ${MAX_IMAGES} images.`);
+      return;
+    }
+    setForm((f) => ({ ...f, images: [...f.images, url] }));
+    setNewImageUrl('');
+  }
+
+  function removeImage(idx: number) {
+    setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== idx) }));
+  }
+
   async function handleSave() {
     const priceRupees = parseFloat(form.priceRupees);
+    const stockQty = parseInt(form.stockQuantity, 10);
+
     if (!form.name.trim()) { setError('Product name is required.'); return; }
     if (isNaN(priceRupees) || priceRupees <= 0) { setError('Enter a valid price in ₹.'); return; }
+    if (isNaN(stockQty) || stockQty < 0) { setError('Enter a valid stock quantity (0 or more).'); return; }
 
     setSaving(true);
     setError(null);
 
     const input: CreateProductInput = {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      category: form.category,
-      subCategory: form.subCategory,
-      price: Math.round(priceRupees * 100), // ₹ → paise
-      unit: form.unit.trim() || 'piece',
-      sellerId: activeStore.id,
-      sellerName: activeStore.name,
-      location: activeStore.location,
-      inStock: form.inStock,
-      isHandmade: form.isHandmade,
-      shipsTo: form.shipsTo,
-      rating: 0,
-      reviewCount: 0,
+      name:          form.name.trim(),
+      description:   form.description.trim(),
+      category:      form.category,
+      subCategory:   form.subCategory,
+      price:         Math.round(priceRupees * 100),
+      unit:          form.unit.trim() || 'piece',
+      stockQuantity: stockQty,
+      sellerId:      activeStore.id,
+      sellerName:    activeStore.name,
+      location:      activeStore.location,
+      isHandmade:    form.isHandmade,
+      shipsTo:       form.shipsTo,
+      images:        form.images,
+      status:        form.status,
+      rating:        editProduct?.rating ?? 0,
+      reviewCount:   editProduct?.reviewCount ?? 0,
     };
 
     try {
@@ -145,7 +174,6 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
               contentContainerStyle={s.formContent}
               keyboardShouldPersistTaps="handled">
 
-              {/* Error */}
               {error && (
                 <View style={s.errorBox}>
                   <Text style={s.errorTxt}>⚠️ {error}</Text>
@@ -222,20 +250,34 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
                 </View>
               </View>
 
-              {/* Price */}
-              <View style={s.field}>
-                <Text style={s.label}>Price (₹) <Text style={s.required}>*</Text></Text>
-                <View style={s.priceRow}>
-                  <View style={s.pricePrefix}>
-                    <Text style={s.prefixTxt}>₹</Text>
+              {/* Price + Stock Quantity row */}
+              <View style={s.twoColRow}>
+                <View style={[s.field, { flex: 1 }]}>
+                  <Text style={s.label}>Price (₹) <Text style={s.required}>*</Text></Text>
+                  <View style={s.priceRow}>
+                    <View style={s.pricePrefix}>
+                      <Text style={s.prefixTxt}>₹</Text>
+                    </View>
+                    <TextInput
+                      style={[s.input, s.priceInput]}
+                      placeholder="0"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={form.priceRupees}
+                      onChangeText={(v) => setField('priceRupees', v.replace(/[^0-9.]/g, ''))}
+                    />
                   </View>
+                </View>
+
+                <View style={[s.field, { flex: 1 }]}>
+                  <Text style={s.label}>Stock Qty <Text style={s.required}>*</Text></Text>
                   <TextInput
-                    style={[s.input, s.priceInput]}
-                    placeholder="0"
+                    style={s.input}
+                    placeholder="e.g. 50"
                     placeholderTextColor="#9ca3af"
                     keyboardType="numeric"
-                    value={form.priceRupees}
-                    onChangeText={(v) => setField('priceRupees', v.replace(/[^0-9.]/g, ''))}
+                    value={form.stockQuantity}
+                    onChangeText={(v) => setField('stockQuantity', v.replace(/[^0-9]/g, ''))}
                   />
                 </View>
               </View>
@@ -280,20 +322,60 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
                 </View>
               </View>
 
+              {/* Images */}
+              <View style={s.field}>
+                <Text style={s.label}>Product Images ({form.images.length}/{MAX_IMAGES})</Text>
+                {form.images.map((url, idx) => (
+                  <View key={idx} style={s.imageRow}>
+                    <Text style={s.imageUrl} numberOfLines={1}>{url}</Text>
+                    <Pressable style={s.imageRemoveBtn} onPress={() => removeImage(idx)}>
+                      <Text style={s.imageRemoveTxt}>✕</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                {form.images.length < MAX_IMAGES && (
+                  <View style={s.imageAddRow}>
+                    <TextInput
+                      style={[s.input, { flex: 1 }]}
+                      placeholder="Paste image URL..."
+                      placeholderTextColor="#9ca3af"
+                      value={newImageUrl}
+                      onChangeText={setNewImageUrl}
+                      autoCapitalize="none"
+                      keyboardType="url"
+                    />
+                    <Pressable style={s.imageAddBtn} onPress={addImage}>
+                      <Text style={s.imageAddTxt}>Add</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+
               {/* Toggles */}
               <View style={s.toggleRow}>
+                {/* Status: Active vs Draft */}
                 <View style={s.toggleItem}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.toggleLabel}>In Stock</Text>
-                    <Text style={s.toggleSub}>Available for orders right now</Text>
+                    <Text style={s.toggleLabel}>Listing Status</Text>
+                    <Text style={s.toggleSub}>
+                      {form.status === 'active' ? 'Active — visible to buyers' : 'Draft — hidden from buyers'}
+                    </Text>
                   </View>
-                  <Switch
-                    value={form.inStock}
-                    onValueChange={(v) => setField('inStock', v)}
-                    trackColor={{ false: '#e5e7eb', true: '#86efac' }}
-                    thumbColor={form.inStock ? '#2d7a47' : '#9ca3af'}
-                  />
+                  <View style={s.statusToggleWrap}>
+                    <Pressable
+                      style={[s.statusPill, form.status === 'draft' && s.statusPillActive]}
+                      onPress={() => setField('status', 'draft')}>
+                      <Text style={[s.statusPillTxt, form.status === 'draft' && s.statusPillTxtActive]}>Draft</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[s.statusPill, form.status === 'active' && s.statusPillActiveGreen]}
+                      onPress={() => setField('status', 'active')}>
+                      <Text style={[s.statusPillTxt, form.status === 'active' && s.statusPillTxtActive]}>Active</Text>
+                    </Pressable>
+                  </View>
                 </View>
+
+                {/* Handmade toggle */}
                 <View style={[s.toggleItem, { borderTopWidth: 1, borderTopColor: '#f3f4f6' }]}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.toggleLabel}>Handmade / Artisan</Text>
@@ -340,7 +422,7 @@ const s = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '93%',
+    maxHeight: '95%',
   },
   sheetHead: {
     flexDirection: 'row',
@@ -364,11 +446,7 @@ const s = StyleSheet.create({
 
   formContent: { paddingHorizontal: 20, paddingVertical: 16, gap: 20 },
 
-  errorBox: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 10,
-    padding: 12,
-  },
+  errorBox: { backgroundColor: '#fee2e2', borderRadius: 10, padding: 12 },
   errorTxt: { fontSize: 13, color: '#991b1b', lineHeight: 18 },
 
   storePill: {
@@ -396,8 +474,9 @@ const s = StyleSheet.create({
     color: '#111827',
     backgroundColor: '#fafafa',
   },
-
   textArea: { height: 80, paddingTop: 10 },
+
+  twoColRow: { flexDirection: 'row', gap: 12 },
 
   priceRow: { flexDirection: 'row', alignItems: 'center' },
   pricePrefix: {
@@ -412,11 +491,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   prefixTxt: { fontSize: 16, fontWeight: '700', color: '#374151' },
-  priceInput: {
-    flex: 1,
-    borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0,
-  },
+  priceInput: { flex: 1, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 },
 
   chips: { gap: 8 },
   chip: {
@@ -452,6 +527,33 @@ const s = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
 
+  imageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  imageUrl: { flex: 1, fontSize: 11, color: '#374151' },
+  imageRemoveBtn: {
+    width: 24, height: 24,
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageRemoveTxt: { fontSize: 10, color: '#dc2626', fontWeight: '700' },
+  imageAddRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  imageAddBtn: {
+    backgroundColor: '#2d7a47',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  imageAddTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+
   toggleRow: {
     backgroundColor: '#fff',
     borderRadius: 14,
@@ -462,6 +564,20 @@ const s = StyleSheet.create({
   toggleItem: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   toggleLabel: { fontSize: 13, fontWeight: '600', color: '#111827' },
   toggleSub: { fontSize: 11, color: '#6b7280', marginTop: 1 },
+
+  statusToggleWrap: { flexDirection: 'row', gap: 6 },
+  statusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 99,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  statusPillActive: { backgroundColor: '#fef3c7', borderColor: '#f59e0b' },
+  statusPillActiveGreen: { backgroundColor: '#2d7a47', borderColor: '#2d7a47' },
+  statusPillTxt: { fontSize: 11, fontWeight: '700', color: '#6b7280' },
+  statusPillTxtActive: { color: '#fff' },
 
   footer: {
     paddingHorizontal: 20,
