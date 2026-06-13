@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 import { HarvestDivider, OrderStatusBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
@@ -13,11 +14,11 @@ const todayStats = [
   { label: 'Store Views', value: '312', icon: '👁️', trend: '+28%', up: true },
 ];
 
-const quickActions = [
-  { icon: '➕', label: 'Add Product', color: '#2d7a47', bg: '#dcfce7' },
-  { icon: '📦', label: 'View Orders', color: '#1e40af', bg: '#dbeafe' },
-  { icon: '💸', label: 'Request Payout', color: '#c97b1a', bg: '#fef3c7' },
-  { icon: '📈', label: 'Analytics', color: '#7c3aed', bg: '#ede9fe' },
+const quickActions: { icon: string; label: string; color: string; bg: string; route: string | null }[] = [
+  { icon: '➕', label: 'Add Product',    color: '#2d7a47', bg: '#dcfce7', route: '/products?openAdd=true' },
+  { icon: '📦', label: 'View Orders',    color: '#1e40af', bg: '#dbeafe', route: '/orders' },
+  { icon: '💸', label: 'Request Payout', color: '#c97b1a', bg: '#fef3c7', route: null },
+  { icon: '📈', label: 'Analytics',      color: '#7c3aed', bg: '#ede9fe', route: '/analytics' },
 ];
 
 const pendingOrders = [
@@ -59,6 +60,7 @@ const storeHealth = [
 
 export default function DashboardScreen() {
   const { activeStore } = useStore();
+  const router = useRouter();
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   return (
@@ -125,7 +127,10 @@ export default function DashboardScreen() {
         <Text style={s.sectionTitle}>Quick Actions</Text>
         <View style={s.actionsRow}>
           {quickActions.map((a) => (
-            <Pressable key={a.label} style={s.actionBtn}>
+            <Pressable
+              key={a.label}
+              style={s.actionBtn}
+              onPress={() => { if (a.route) router.push(a.route as string); }}>
               <View style={[s.actionIcon, { backgroundColor: a.bg }]}>
                 <Text style={{ fontSize: 20 }}>{a.icon}</Text>
               </View>

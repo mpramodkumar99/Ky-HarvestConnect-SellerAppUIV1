@@ -4,6 +4,7 @@ import {
   StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 
 import { StoreSwitcher } from '@/components/store-switcher';
 import { ProductFormModal } from '@/components/product-form-modal';
@@ -48,10 +49,19 @@ type FilterTab = (typeof filterTabs)[number];
 export default function ProductsScreen() {
   const { activeStore } = useStore();
   const perms = ROLE_PERMISSIONS[activeStore.role];
+  const { openAdd } = useLocalSearchParams<{ openAdd?: string }>();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | undefined>();
+
+  // Auto-open Add form when navigated from Dashboard quick action
+  useEffect(() => {
+    if (openAdd === 'true' && perms.canEditProducts) {
+      setEditingProduct(undefined);
+      setFormOpen(true);
+    }
+  }, [openAdd]);
 
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterTab>('All');
