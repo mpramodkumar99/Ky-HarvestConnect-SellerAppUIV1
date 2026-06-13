@@ -1,14 +1,22 @@
 import React, { createContext, useContext, useState } from 'react';
+import type { SellerType } from '@/services/user-api';
 
 export type StoreRole = 'owner' | 'manager' | 'staff';
 
+// Store mirrors the Seller type from UserSvc with UI-only additions.
+// id must match the sellerId used in catalog-svc (e.g. 'seller-101').
 export interface Store {
-  id: string;
+  id: string;            // sellerId — matches catalog-svc seed IDs
   name: string;
-  category: string;
+  type: SellerType;      // from UserSvc Seller.type
+  category: string;      // human-readable label for UI display
   icon: string;
   location: string;
-  role: StoreRole;
+  phone: string;
+  pincode: string;
+  verified: boolean;
+  fssaiNumber?: string;
+  role: StoreRole;       // this user's role within the seller account
   memberCount: number;
   productCount: number;
   ordersToday: number;
@@ -32,13 +40,19 @@ interface StoreContextValue {
   setActiveStore: (store: Store) => void;
 }
 
+// IDs match catalog-svc and user-svc seed data so product queries resolve correctly.
 const STORES: Store[] = [
   {
-    id: 's1',
-    name: 'Lakshmi Farms',
-    category: 'Vegetables & Spices',
-    icon: '🌾',
-    location: 'Armoor Mandal, Nizamabad',
+    id: 'seller-112',
+    name: 'Desi Dairy Armoor',
+    type: 'dairy',
+    category: 'Dairy & Animal Products',
+    icon: '🥛',
+    location: 'Armoor, Nizamabad',
+    phone: '+919000000112',
+    pincode: '503111',
+    verified: true,
+    fssaiNumber: '10019042000112',
     role: 'owner',
     memberCount: 3,
     productCount: 6,
@@ -46,11 +60,16 @@ const STORES: Store[] = [
     revenueToday: '₹4,280',
   },
   {
-    id: 's2',
-    name: 'Sridevi Spice Co.',
-    category: 'Spices & Condiments',
-    icon: '🌶️',
-    location: 'Nizamabad Town',
+    id: 'seller-113',
+    name: 'Amma Kitchen',
+    type: 'homefood',
+    category: 'Home Foods & Pickles',
+    icon: '🍱',
+    location: 'Nizamabad, Telangana',
+    phone: '+919000000113',
+    pincode: '503001',
+    verified: true,
+    fssaiNumber: '10019042000113',
     role: 'owner',
     memberCount: 1,
     productCount: 12,
@@ -58,11 +77,16 @@ const STORES: Store[] = [
     revenueToday: '₹2,100',
   },
   {
-    id: 's3',
-    name: 'Krishna Organics',
-    category: 'Organic Produce',
-    icon: '🥬',
-    location: 'Karimnagar District',
+    id: 'seller-105',
+    name: 'Spice Route Nizamabad',
+    type: 'farmer',
+    category: 'Vegetables & Spices',
+    icon: '🌶️',
+    location: 'Nizamabad, Telangana',
+    phone: '+919000000105',
+    pincode: '503001',
+    verified: true,
+    fssaiNumber: '10019042000105',
     role: 'manager',
     memberCount: 4,
     productCount: 18,
@@ -72,7 +96,7 @@ const STORES: Store[] = [
 ];
 
 const TEAM: Record<string, TeamMember[]> = {
-  s1: [
+  'seller-112': [
     {
       id: 'm1',
       name: 'Sridevi Reddy',
@@ -101,7 +125,7 @@ const TEAM: Record<string, TeamMember[]> = {
       joinedAt: 'Invited Jun 2026',
     },
   ],
-  s2: [
+  'seller-113': [
     {
       id: 'm4',
       name: 'Sridevi Reddy',
@@ -112,14 +136,14 @@ const TEAM: Record<string, TeamMember[]> = {
       joinedAt: 'Mar 2024',
     },
   ],
-  s3: [
+  'seller-105': [
     {
       id: 'm5',
-      name: 'Krishna Rao',
+      name: 'Priya Sharma',
       phone: '+91 99887 76655',
       role: 'owner',
       status: 'active',
-      avatar: 'KR',
+      avatar: 'PS',
       joinedAt: 'Feb 2024',
     },
     {

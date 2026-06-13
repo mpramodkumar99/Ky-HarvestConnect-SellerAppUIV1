@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Modal, View, Text, TextInput, Pressable, ScrollView,
-  Switch, StyleSheet, ActivityIndicator, Alert,
+  Switch, StyleSheet, ActivityIndicator,
 } from 'react-native';
 
 import {
@@ -10,6 +10,7 @@ import {
   createProduct, updateProduct,
 } from '@/services/catalog-api';
 import { useStore } from '@/context/store-context';
+import { useToast } from '@/components/toast-provider';
 
 const MAX_IMAGES = 5;
 
@@ -66,6 +67,7 @@ function formFromProduct(p: CatalogProduct): FormState {
 
 export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Props) {
   const { activeStore } = useStore();
+  const { showToast } = useToast();
   const isEdit = !!editProduct;
 
   const [form, setForm] = useState<FormState>(defaultForm());
@@ -94,7 +96,7 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
     const url = newImageUrl.trim();
     if (!url) return;
     if (form.images.length >= MAX_IMAGES) {
-      Alert.alert('Limit reached', `You can add up to ${MAX_IMAGES} images.`);
+      showToast(`You can add up to ${MAX_IMAGES} images.`, 'warning');
       return;
     }
     setForm((f) => ({ ...f, images: [...f.images, url] }));

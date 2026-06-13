@@ -1,24 +1,36 @@
 import { useState } from 'react';
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 import { KycBadge, RoleBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
 import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG } from '@/context/store-context';
+import { useToast } from '@/components/toast-provider';
 
-const menuItems = [
-  { icon: '🏪', label: 'Store Settings', desc: 'Store name, photo, description, category' },
-  { icon: '🌾', label: 'My Products', desc: 'Manage your product catalogue', badge: '6 listed' },
-  { icon: '📦', label: 'Order History', desc: 'All completed and cancelled orders' },
-  { icon: '💳', label: 'Bank & Payouts', desc: 'HDFC ···4821 · T+1 settlement', highlight: true },
-  { icon: '📊', label: 'Transaction History', desc: 'All credits, debits, and commissions' },
-  { icon: '🚚', label: 'Delivery Zones', desc: 'Mandal, district, state coverage areas' },
-  { icon: '🛡️', label: 'KYC & Documents', desc: 'Aadhaar, FSSAI, bank verification' },
-  { icon: '🎁', label: 'Promotions & Offers', desc: 'Create discounts and bundle deals' },
-  { icon: '📣', label: 'Share My Store', desc: 'Share your storefront link' },
-  { icon: '⭐', label: 'Reviews & Ratings', desc: '4.8 avg · 342 reviews', badge: '2 new' },
-  { icon: '❓', label: 'Help & Support', desc: 'FAQs, contact, seller guides' },
-  { icon: '⚙️', label: 'App Settings', desc: 'Notifications, language, privacy' },
+type MenuItem = {
+  icon: string;
+  label: string;
+  desc: string;
+  badge?: string;
+  highlight?: boolean;
+  route?: string;
+  comingSoon?: boolean;
+};
+
+const menuItems: MenuItem[] = [
+  { icon: '🏪', label: 'Store Settings',      desc: 'Store name, photo, description, category',     comingSoon: true },
+  { icon: '🌾', label: 'My Products',          desc: 'Manage your product catalogue', badge: '6 listed', route: '/products' },
+  { icon: '📦', label: 'Order History',        desc: 'All completed and cancelled orders',            route: '/orders' },
+  { icon: '💳', label: 'Bank & Payouts',       desc: 'HDFC ···4821 · T+1 settlement', highlight: true, comingSoon: true },
+  { icon: '📊', label: 'Transaction History',  desc: 'All credits, debits, and commissions',          comingSoon: true },
+  { icon: '🚚', label: 'Delivery Zones',       desc: 'Mandal, district, state coverage areas',        comingSoon: true },
+  { icon: '🛡️', label: 'KYC & Documents',     desc: 'Aadhaar, FSSAI, bank verification',             comingSoon: true },
+  { icon: '🎁', label: 'Promotions & Offers',  desc: 'Create discounts and bundle deals' },
+  { icon: '📣', label: 'Share My Store',       desc: 'Share your storefront link' },
+  { icon: '⭐', label: 'Reviews & Ratings',    desc: '4.8 avg · 342 reviews', badge: '2 new' },
+  { icon: '❓', label: 'Help & Support',       desc: 'FAQs, contact, seller guides' },
+  { icon: '⚙️', label: 'App Settings',        desc: 'Notifications, language, privacy' },
 ];
 
 const storeStats = [
@@ -32,7 +44,17 @@ export default function ProfileScreen() {
   const { stores, activeStore, teamMembers, setActiveStore } = useStore();
   const activeTeam = teamMembers[activeStore.id] ?? [];
   const perms = ROLE_PERMISSIONS[activeStore.role];
+  const router = useRouter();
+  const { showToast } = useToast();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  function handleMenuPress(item: MenuItem) {
+    if (item.route) {
+      router.push(item.route as string);
+    } else if (item.comingSoon) {
+      showToast(`${item.label} is coming soon.`, 'info');
+    }
+  }
 
   return (
     <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
@@ -88,7 +110,7 @@ export default function ProfileScreen() {
               <Text style={s.statusTitle}>Identity & Compliance</Text>
               <Text style={s.statusSub}>Aadhaar · FSSAI · Bank Account</Text>
             </View>
-            <KycBadge status="verified" />
+            <KycBadge status={activeStore.verified ? 'verified' : 'pending'} />
           </View>
 
           <View style={[s.statusRow, { marginTop: 10 }]}>
@@ -235,7 +257,7 @@ export default function ProfileScreen() {
       {/* Menu Items */}
       <View style={s.menuSection}>
         {menuItems.map((item, i) => (
-          <Pressable key={i} style={[s.menuItem, item.highlight && s.menuItemHL]}>
+          <Pressable key={i} style={[s.menuItem, item.highlight && s.menuItemHL]} onPress={() => handleMenuPress(item)}>
             <View style={[s.menuIcon, item.highlight && s.menuIconHL]}>
               <Text style={{ fontSize: 18 }}>{item.icon}</Text>
             </View>

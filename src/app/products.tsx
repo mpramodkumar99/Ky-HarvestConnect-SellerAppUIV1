@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   ScrollView, View, Text, TextInput, Pressable,
-  StyleSheet, ActivityIndicator, Alert,
+  StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 
 import { StoreSwitcher } from '@/components/store-switcher';
+import { useToast } from '@/components/toast-provider';
 import { ProductFormModal } from '@/components/product-form-modal';
 import { useStore, ROLE_PERMISSIONS } from '@/context/store-context';
 import {
@@ -50,6 +51,7 @@ export default function ProductsScreen() {
   const { activeStore } = useStore();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const { openAdd } = useLocalSearchParams<{ openAdd?: string }>();
+  const { showToast, showConfirm } = useToast();
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -87,31 +89,26 @@ export default function ProductsScreen() {
       setProducts((prev) =>
         prev.map((p) => p.id === product.id ? { ...p, status: product.status } : p)
       );
-      Alert.alert('Error', e instanceof Error ? e.message : 'Could not update listing status.');
+      showToast(e instanceof Error ? e.message : 'Could not update listing status.', 'error');
     }
   }
 
   function confirmDelete(product: CatalogProduct) {
-    Alert.alert(
-      'Delete Product',
-      `Remove "${product.name}" from your catalogue? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setProducts((prev) => prev.filter((p) => p.id !== product.id));
-            try {
-              await deleteProduct(product.id, activeStore.id);
-            } catch {
-              fetchProducts();
-              Alert.alert('Error', 'Could not delete product.');
-            }
-          },
-        },
-      ]
-    );
+    showConfirm({
+      title: 'Delete Product',
+      message: `Remove "${product.name}" from your catalogue? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        setProducts((prev) => prev.filter((p) => p.id !== product.id));
+        try {
+          await deleteProduct(product.id, activeStore.id);
+        } catch {
+          fetchProducts();
+          showToast('Could not delete product.', 'error');
+        }
+      },
+    });
   }
 
   function openAddForm() { setEditingProduct(undefined); setFormOpen(true); }
