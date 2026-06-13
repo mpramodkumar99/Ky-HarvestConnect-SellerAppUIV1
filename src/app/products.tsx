@@ -54,18 +54,8 @@ export default function ProductsScreen() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | undefined>();
-
-  // Auto-open Add form when navigated from Dashboard quick action
-  useEffect(() => {
-    if (openAdd === 'true' && perms.canEditProducts) {
-      setEditingProduct(undefined);
-      setFormOpen(true);
-    }
-  }, [openAdd]);
-
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterTab>('All');
-
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -124,8 +114,13 @@ export default function ProductsScreen() {
     );
   }
 
-  function openAdd() { setEditingProduct(undefined); setFormOpen(true); }
+  function openAddForm() { setEditingProduct(undefined); setFormOpen(true); }
   function openEdit(product: CatalogProduct) { setEditingProduct(product); setFormOpen(true); }
+
+  // Auto-open Add form when navigated from Dashboard quick action
+  useEffect(() => {
+    if (openAdd === 'true' && perms.canEditProducts) openAddForm();
+  }, [openAdd]);
 
   function onSaved(saved: CatalogProduct) {
     setProducts((prev) => {
@@ -188,7 +183,7 @@ export default function ProductsScreen() {
               <Text style={s.headerSub}>{activeStore.name} · {products.length} listings</Text>
             </Pressable>
             {perms.canEditProducts && (
-              <Pressable style={s.addBtn} onPress={openAdd}>
+              <Pressable style={s.addBtn} onPress={openAddForm}>
                 <Text style={s.addBtnText}>＋ Add</Text>
               </Pressable>
             )}
@@ -340,7 +335,7 @@ export default function ProductsScreen() {
           )}
 
           {perms.canEditProducts && (
-            <Pressable style={s.addProductCta} onPress={openAdd}>
+            <Pressable style={s.addProductCta} onPress={openAddForm}>
               <Text style={{ fontSize: 28 }}>＋</Text>
               <Text style={s.addProductCtaTitle}>Add a New Product</Text>
               <Text style={s.addProductCtaSub}>
