@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { useState, useEffect } from 'react';
+import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { KycBadge, RoleBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
-import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG } from '@/context/store-context';
+import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG, DELIVERY_ZONE_CONFIG } from '@/context/store-context';
 import { useToast } from '@/components/toast-provider';
+import { getBankAccount, type BankAccount } from '@/services/user-api';
 
 type MenuItem = {
   icon: string;
@@ -41,12 +42,18 @@ const storeStats = [
 ];
 
 export default function ProfileScreen() {
-  const { stores, activeStore, teamMembers, setActiveStore } = useStore();
-  const activeTeam = teamMembers[activeStore.id] ?? [];
+  const { stores, activeStore, teamMembers, loadingTeam, setActiveStore } = useStore();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const router = useRouter();
   const { showToast } = useToast();
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
+
+  useEffect(() => {
+    getBankAccount(activeStore.id)
+      .then(setBankAccount)
+      .catch(() => setBankAccount(null));
+  }, [activeStore.id]);
 
   function handleMenuPress(item: MenuItem) {
     if (item.route) {
@@ -119,10 +126,14 @@ export default function ProfileScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.statusTitle}>Payout Account</Text>
-              <Text style={s.statusSub}>HDFC Bank · ···4821 · IFSC HDFC0001234</Text>
+              <Text style={s.statusSub}>
+                {bankAccount
+                  ? `${bankAccount.bankName} · ${bankAccount.accountNumber} · ${bankAccount.ifscCode}`
+                  : 'Not set up yet'}
+              </Text>
             </View>
-            <Pressable style={s.changeBtn}>
-              <Text style={s.changeTxt}>Change</Text>
+            <Pressable style={s.changeBtn} onPress={() => showToast('Bank & Payouts is coming soon.', 'info')}>
+              <Text style={s.changeTxt}>{bankAccount ? 'Change' : 'Add'}</Text>
             </Pressable>
           </View>
         </View>
@@ -136,15 +147,18 @@ export default function ProfileScreen() {
             <Pressable><Text style={s.editCoverage}>Edit ›</Text></Pressable>
           </View>
           <View style={s.coverageBadges}>
-            {[
-              { label: 'Armoor Mandal', bg: '#f3f4f6', text: '#374151', icon: '🏘️' },
-              { label: 'Nizamabad District', bg: '#fef3c7', text: '#92400e', icon: '🏙️' },
-              { label: 'All India (Spices)', bg: '#dcfce7', text: '#166534', icon: '🇮🇳' },
-            ].map((z) => (
-              <View key={z.label} style={[s.coverageBadge, { backgroundColor: z.bg }]}>
-                <Text style={[s.coverageBadgeTxt, { color: z.text }]}>{z.icon} {z.label}</Text>
-              </View>
-            ))}
+            {activeStore.deliveryZones.length > 0 ? (
+              activeStore.deliveryZones.map(zone => {
+                const zc = DELIVERY_ZONE_CONFIG[zone];
+                return (
+                  <View key={zone} style={[s.coverageBadge, { backgroundColor: zc.bg }]}>
+                    <Text style={[s.coverageBadgeTxt, { color: zc.text }]}>{zc.icon} {zc.label}</Text>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={{ fontSize: 12, color: '#9ca3af' }}>No delivery zones configured</Text>
+            )}
           </View>
         </View>
       </View>
@@ -155,10 +169,14 @@ export default function ProfileScreen() {
           <Text style={s.fssaiIcon}>📋</Text>
           <View style={{ flex: 1 }}>
             <Text style={s.fssaiTitle}>FSSAI License</Text>
-            <Text style={s.fssaiNum}>21523039000123 · Valid till Dec 2026</Text>
+            <Text style={s.fssaiNum}>
+              {activeStore.fssaiNumber ?? 'Not provided'}
+            </Text>
           </View>
-          <View style={s.fssaiStatus}>
-            <Text style={s.fssaiStatusTxt}>Active</Text>
+          <View style={[s.fssaiStatus, { backgroundColor: activeStore.fssaiNumber ? '#dcfce7' : '#f3f4f6' }]}>
+            <Text style={[s.fssaiStatusTxt, { color: activeStore.fssaiNumber ? '#166534' : '#6b7280' }]}>
+              {activeStore.fssaiNumber ? 'Active' : 'Pending'}
+            </Text>
           </View>
         </View>
       </View>
@@ -220,7 +238,12 @@ export default function ProfileScreen() {
           )}
         </View>
         <View style={s.teamCard}>
-          {activeTeam.map((member, i) => {
+          {loadingTeam && (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#2d7a47" />
+            </View>
+          )}
+          {!loadingTeam && teamMembers.map((member, i) => {
             const rc = ROLE_CONFIG[member.role];
             return (
               <View key={member.id} style={[s.memberRow, i > 0 && s.memberRowBorder]}>
