@@ -1,50 +1,28 @@
-import { useState } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
-import Animated, { Easing, Keyframe } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
-
-const INITIAL_SCALE_FACTOR = Dimensions.get('screen').height / 90;
-const DURATION = 600;
+import { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet } from 'react-native';
 
 export function AnimatedSplashOverlay() {
   const [visible, setVisible] = useState(true);
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(400),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setVisible(false));
+  }, []);
 
   if (!visible) return null;
 
-  const splashKeyframe = new Keyframe({
-    0: {
-      transform: [{ scale: INITIAL_SCALE_FACTOR }],
-      opacity: 1,
-    },
-    20: {
-      opacity: 1,
-    },
-    70: {
-      opacity: 0,
-      easing: Easing.elastic(0.7),
-    },
-    100: {
-      opacity: 0,
-      transform: [{ scale: 1 }],
-      easing: Easing.elastic(0.7),
-    },
-  });
-
-  return (
-    <Animated.View
-      entering={splashKeyframe.duration(DURATION).withCallback((finished) => {
-        'worklet';
-        if (finished) {
-          scheduleOnRN(setVisible, false);
-        }
-      })}
-      style={styles.backgroundSolidColor}
-    />
-  );
+  return <Animated.View style={[styles.overlay, { opacity }]} />;
 }
 
 const styles = StyleSheet.create({
-  backgroundSolidColor: {
+  overlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: '#2d7a47',
     zIndex: 1000,

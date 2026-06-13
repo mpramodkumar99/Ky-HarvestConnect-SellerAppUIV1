@@ -1,4 +1,5 @@
-const BASE_URL = 'http://localhost:3003';
+// Android emulator routes to the host machine via 10.0.2.2, not localhost
+const BASE_URL = 'http://10.0.2.2:3003';
 
 // ── Types (mirror HC_CatalogSvc/src/types.ts) ────────────────────────────────
 

@@ -17,7 +17,8 @@ export function StoreSwitcher({ visible, onClose }: Props) {
       animationType="slide"
       statusBarTranslucent
       onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose} />
+      <View style={s.container}>
+        <Pressable style={[StyleSheet.absoluteFill, s.backdrop]} onPress={onClose} />
       <View style={s.sheet}>
         <View style={s.handle} />
 
@@ -92,13 +93,17 @@ export function StoreSwitcher({ visible, onClose }: Props) {
           </Pressable>
         </View>
       </View>
+      </View>
     </Modal>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: {
+  container: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {

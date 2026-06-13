@@ -3,7 +3,6 @@ import {
   Modal, View, Text, TextInput, Pressable, ScrollView,
   Switch, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   CatalogProduct, CreateProductInput, Category, SubCategory, ProductStatus,
@@ -158,254 +157,261 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
       animationType="slide"
       statusBarTranslucent
       onRequestClose={onClose}>
-      <View style={s.overlay}>
+      {/*
+        CORRECT bottom-sheet pattern:
+        - container: flex:1 + justifyContent:'flex-end' → pushes sheet to bottom
+        - backdrop: absoluteFill (out of flex flow, so it doesn't consume height)
+        - sheet: normal flex child → lands at bottom
+      */}
+      <View style={s.container}>
+        <Pressable style={[StyleSheet.absoluteFill, s.backdrop]} onPress={onClose} />
+
         <View style={s.sheet}>
-          <SafeAreaView edges={['bottom']} style={{ flex: 1 }}>
-            {/* Header */}
-            <View style={s.sheetHead}>
-              <Text style={s.sheetTitle}>{isEdit ? 'Edit Product' : 'Add New Product'}</Text>
-              <Pressable style={s.closeBtn} onPress={onClose}>
-                <Text style={s.closeTxt}>✕</Text>
-              </Pressable>
+          {/* Header */}
+          <View style={s.sheetHead}>
+            <Text style={s.sheetTitle}>{isEdit ? 'Edit Product' : 'Add New Product'}</Text>
+            <Pressable style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeTxt}>✕</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={s.scrollArea}
+            contentContainerStyle={s.formContent}
+            keyboardShouldPersistTaps="handled">
+
+            {error && (
+              <View style={s.errorBox}>
+                <Text style={s.errorTxt}>⚠️ {error}</Text>
+              </View>
+            )}
+
+            {/* Store context pill */}
+            <View style={s.storePill}>
+              <Text style={s.storePillTxt}>
+                {activeStore.icon} Listing under {activeStore.name}
+              </Text>
             </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={s.formContent}
-              keyboardShouldPersistTaps="handled">
+            {/* Product Name */}
+            <View style={s.field}>
+              <Text style={s.label}>Product Name <Text style={s.required}>*</Text></Text>
+              <TextInput
+                style={s.input}
+                placeholder="e.g. Organic Turmeric Powder"
+                placeholderTextColor="#9ca3af"
+                value={form.name}
+                onChangeText={(v) => setField('name', v)}
+                maxLength={120}
+              />
+            </View>
 
-              {error && (
-                <View style={s.errorBox}>
-                  <Text style={s.errorTxt}>⚠️ {error}</Text>
-                </View>
-              )}
+            {/* Description */}
+            <View style={s.field}>
+              <Text style={s.label}>Description</Text>
+              <TextInput
+                style={[s.input, s.textArea]}
+                placeholder="Tell buyers what makes this product special — origin, process, quality..."
+                placeholderTextColor="#9ca3af"
+                value={form.description}
+                onChangeText={(v) => setField('description', v)}
+                maxLength={1000}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
 
-              {/* Store context pill */}
-              <View style={s.storePill}>
-                <Text style={s.storePillTxt}>
-                  {activeStore.icon} Listing under {activeStore.name}
-                </Text>
+            {/* Category */}
+            <View style={s.field}>
+              <Text style={s.label}>Category <Text style={s.required}>*</Text></Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+                {CATEGORIES.map((c) => (
+                  <Pressable
+                    key={c.value}
+                    style={[s.chip, form.category === c.value && s.chipActive]}
+                    onPress={() => setCategory(c.value)}>
+                    <Text style={[s.chipTxt, form.category === c.value && s.chipTxtActive]}>
+                      {c.icon} {c.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* SubCategory */}
+            <View style={s.field}>
+              <Text style={s.label}>Sub-Category <Text style={s.required}>*</Text></Text>
+              <View style={s.subCatGrid}>
+                {subCats.map((sc) => (
+                  <Pressable
+                    key={sc.value}
+                    style={[s.subCatChip, form.subCategory === sc.value && s.chipActive]}
+                    onPress={() => setField('subCategory', sc.value as SubCategory)}>
+                    <Text style={[s.chipTxt, form.subCategory === sc.value && s.chipTxtActive]}>
+                      {sc.label}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
+            </View>
 
-              {/* Product Name */}
-              <View style={s.field}>
-                <Text style={s.label}>Product Name <Text style={s.required}>*</Text></Text>
-                <TextInput
-                  style={s.input}
-                  placeholder="e.g. Organic Turmeric Powder"
-                  placeholderTextColor="#9ca3af"
-                  value={form.name}
-                  onChangeText={(v) => setField('name', v)}
-                  maxLength={120}
-                />
-              </View>
-
-              {/* Description */}
-              <View style={s.field}>
-                <Text style={s.label}>Description</Text>
-                <TextInput
-                  style={[s.input, s.textArea]}
-                  placeholder="Tell buyers what makes this product special — origin, process, quality..."
-                  placeholderTextColor="#9ca3af"
-                  value={form.description}
-                  onChangeText={(v) => setField('description', v)}
-                  maxLength={1000}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                />
-              </View>
-
-              {/* Category */}
-              <View style={s.field}>
-                <Text style={s.label}>Category <Text style={s.required}>*</Text></Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-                  {CATEGORIES.map((c) => (
-                    <Pressable
-                      key={c.value}
-                      style={[s.chip, form.category === c.value && s.chipActive]}
-                      onPress={() => setCategory(c.value)}>
-                      <Text style={[s.chipTxt, form.category === c.value && s.chipTxtActive]}>
-                        {c.icon} {c.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* SubCategory */}
-              <View style={s.field}>
-                <Text style={s.label}>Sub-Category <Text style={s.required}>*</Text></Text>
-                <View style={s.subCatGrid}>
-                  {subCats.map((sc) => (
-                    <Pressable
-                      key={sc.value}
-                      style={[s.subCatChip, form.subCategory === sc.value && s.chipActive]}
-                      onPress={() => setField('subCategory', sc.value as SubCategory)}>
-                      <Text style={[s.chipTxt, form.subCategory === sc.value && s.chipTxtActive]}>
-                        {sc.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              {/* Price + Stock Quantity row */}
-              <View style={s.twoColRow}>
-                <View style={[s.field, { flex: 1 }]}>
-                  <Text style={s.label}>Price (₹) <Text style={s.required}>*</Text></Text>
-                  <View style={s.priceRow}>
-                    <View style={s.pricePrefix}>
-                      <Text style={s.prefixTxt}>₹</Text>
-                    </View>
-                    <TextInput
-                      style={[s.input, s.priceInput]}
-                      placeholder="0"
-                      placeholderTextColor="#9ca3af"
-                      keyboardType="numeric"
-                      value={form.priceRupees}
-                      onChangeText={(v) => setField('priceRupees', v.replace(/[^0-9.]/g, ''))}
-                    />
+            {/* Price + Stock Quantity row */}
+            <View style={s.twoColRow}>
+              <View style={[s.field, { flex: 1 }]}>
+                <Text style={s.label}>Price (₹) <Text style={s.required}>*</Text></Text>
+                <View style={s.priceRow}>
+                  <View style={s.pricePrefix}>
+                    <Text style={s.prefixTxt}>₹</Text>
                   </View>
-                </View>
-
-                <View style={[s.field, { flex: 1 }]}>
-                  <Text style={s.label}>Stock Qty <Text style={s.required}>*</Text></Text>
                   <TextInput
-                    style={s.input}
-                    placeholder="e.g. 50"
+                    style={[s.input, s.priceInput]}
+                    placeholder="0"
                     placeholderTextColor="#9ca3af"
                     keyboardType="numeric"
-                    value={form.stockQuantity}
-                    onChangeText={(v) => setField('stockQuantity', v.replace(/[^0-9]/g, ''))}
+                    value={form.priceRupees}
+                    onChangeText={(v) => setField('priceRupees', v.replace(/[^0-9.]/g, ''))}
                   />
                 </View>
               </View>
 
-              {/* Unit */}
-              <View style={s.field}>
-                <Text style={s.label}>Unit <Text style={s.required}>*</Text></Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-                  {COMMON_UNITS.map((u) => (
-                    <Pressable
-                      key={u}
-                      style={[s.chip, form.unit === u && s.chipActive]}
-                      onPress={() => setField('unit', u)}>
-                      <Text style={[s.chipTxt, form.unit === u && s.chipTxtActive]}>{u}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+              <View style={[s.field, { flex: 1 }]}>
+                <Text style={s.label}>Stock Qty <Text style={s.required}>*</Text></Text>
                 <TextInput
-                  style={[s.input, { marginTop: 8 }]}
-                  placeholder="Or type custom unit..."
+                  style={s.input}
+                  placeholder="e.g. 50"
                   placeholderTextColor="#9ca3af"
-                  value={form.unit}
-                  onChangeText={(v) => setField('unit', v)}
-                  maxLength={30}
+                  keyboardType="numeric"
+                  value={form.stockQuantity}
+                  onChangeText={(v) => setField('stockQuantity', v.replace(/[^0-9]/g, ''))}
                 />
               </View>
-
-              {/* Ships To */}
-              <View style={s.field}>
-                <Text style={s.label}>Delivery Scope <Text style={s.required}>*</Text></Text>
-                <View style={s.shipsRow}>
-                  {SHIPS_TO_OPTIONS.map((opt) => (
-                    <Pressable
-                      key={opt.value}
-                      style={[s.shipsChip, form.shipsTo === opt.value && s.chipActive]}
-                      onPress={() => setField('shipsTo', opt.value)}>
-                      <Text style={[s.chipTxt, form.shipsTo === opt.value && s.chipTxtActive]}>
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              {/* Images */}
-              <View style={s.field}>
-                <Text style={s.label}>Product Images ({form.images.length}/{MAX_IMAGES})</Text>
-                {form.images.map((url, idx) => (
-                  <View key={idx} style={s.imageRow}>
-                    <Text style={s.imageUrl} numberOfLines={1}>{url}</Text>
-                    <Pressable style={s.imageRemoveBtn} onPress={() => removeImage(idx)}>
-                      <Text style={s.imageRemoveTxt}>✕</Text>
-                    </Pressable>
-                  </View>
-                ))}
-                {form.images.length < MAX_IMAGES && (
-                  <View style={s.imageAddRow}>
-                    <TextInput
-                      style={[s.input, { flex: 1 }]}
-                      placeholder="Paste image URL..."
-                      placeholderTextColor="#9ca3af"
-                      value={newImageUrl}
-                      onChangeText={setNewImageUrl}
-                      autoCapitalize="none"
-                      keyboardType="url"
-                    />
-                    <Pressable style={s.imageAddBtn} onPress={addImage}>
-                      <Text style={s.imageAddTxt}>Add</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-
-              {/* Toggles */}
-              <View style={s.toggleRow}>
-                {/* Status: Active vs Draft */}
-                <View style={s.toggleItem}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.toggleLabel}>Listing Status</Text>
-                    <Text style={s.toggleSub}>
-                      {form.status === 'active' ? 'Active — visible to buyers' : 'Draft — hidden from buyers'}
-                    </Text>
-                  </View>
-                  <View style={s.statusToggleWrap}>
-                    <Pressable
-                      style={[s.statusPill, form.status === 'draft' && s.statusPillActive]}
-                      onPress={() => setField('status', 'draft')}>
-                      <Text style={[s.statusPillTxt, form.status === 'draft' && s.statusPillTxtActive]}>Draft</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[s.statusPill, form.status === 'active' && s.statusPillActiveGreen]}
-                      onPress={() => setField('status', 'active')}>
-                      <Text style={[s.statusPillTxt, form.status === 'active' && s.statusPillTxtActive]}>Active</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* Handmade toggle */}
-                <View style={[s.toggleItem, { borderTopWidth: 1, borderTopColor: '#f3f4f6' }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.toggleLabel}>Handmade / Artisan</Text>
-                    <Text style={s.toggleSub}>Made by hand or local craft</Text>
-                  </View>
-                  <Switch
-                    value={form.isHandmade}
-                    onValueChange={(v) => setField('isHandmade', v)}
-                    trackColor={{ false: '#e5e7eb', true: '#86efac' }}
-                    thumbColor={form.isHandmade ? '#2d7a47' : '#9ca3af'}
-                  />
-                </View>
-              </View>
-
-            </ScrollView>
-
-            {/* Save Button */}
-            <View style={s.footer}>
-              <Pressable
-                style={[s.saveBtn, saving && s.saveBtnDisabled]}
-                onPress={handleSave}
-                disabled={saving}>
-                {saving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={s.saveTxt}>{isEdit ? '💾 Save Changes' : '＋ Add Product'}</Text>
-                )}
-              </Pressable>
             </View>
-          </SafeAreaView>
+
+            {/* Unit */}
+            <View style={s.field}>
+              <Text style={s.label}>Unit <Text style={s.required}>*</Text></Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+                {COMMON_UNITS.map((u) => (
+                  <Pressable
+                    key={u}
+                    style={[s.chip, form.unit === u && s.chipActive]}
+                    onPress={() => setField('unit', u)}>
+                    <Text style={[s.chipTxt, form.unit === u && s.chipTxtActive]}>{u}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <TextInput
+                style={[s.input, { marginTop: 8 }]}
+                placeholder="Or type custom unit..."
+                placeholderTextColor="#9ca3af"
+                value={form.unit}
+                onChangeText={(v) => setField('unit', v)}
+                maxLength={30}
+              />
+            </View>
+
+            {/* Ships To */}
+            <View style={s.field}>
+              <Text style={s.label}>Delivery Scope <Text style={s.required}>*</Text></Text>
+              <View style={s.shipsRow}>
+                {SHIPS_TO_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    style={[s.shipsChip, form.shipsTo === opt.value && s.chipActive]}
+                    onPress={() => setField('shipsTo', opt.value)}>
+                    <Text style={[s.chipTxt, form.shipsTo === opt.value && s.chipTxtActive]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Images */}
+            <View style={s.field}>
+              <Text style={s.label}>Product Images ({form.images.length}/{MAX_IMAGES})</Text>
+              {form.images.map((url, idx) => (
+                <View key={idx} style={s.imageRow}>
+                  <Text style={s.imageUrl} numberOfLines={1}>{url}</Text>
+                  <Pressable style={s.imageRemoveBtn} onPress={() => removeImage(idx)}>
+                    <Text style={s.imageRemoveTxt}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {form.images.length < MAX_IMAGES && (
+                <View style={s.imageAddRow}>
+                  <TextInput
+                    style={[s.input, { flex: 1 }]}
+                    placeholder="Paste image URL..."
+                    placeholderTextColor="#9ca3af"
+                    value={newImageUrl}
+                    onChangeText={setNewImageUrl}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                  />
+                  <Pressable style={s.imageAddBtn} onPress={addImage}>
+                    <Text style={s.imageAddTxt}>Add</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+
+            {/* Toggles */}
+            <View style={s.toggleRow}>
+              {/* Status: Active vs Draft */}
+              <View style={s.toggleItem}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.toggleLabel}>Listing Status</Text>
+                  <Text style={s.toggleSub}>
+                    {form.status === 'active' ? 'Active — visible to buyers' : 'Draft — hidden from buyers'}
+                  </Text>
+                </View>
+                <View style={s.statusToggleWrap}>
+                  <Pressable
+                    style={[s.statusPill, form.status === 'draft' && s.statusPillActive]}
+                    onPress={() => setField('status', 'draft')}>
+                    <Text style={[s.statusPillTxt, form.status === 'draft' && s.statusPillTxtActive]}>Draft</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[s.statusPill, form.status === 'active' && s.statusPillActiveGreen]}
+                    onPress={() => setField('status', 'active')}>
+                    <Text style={[s.statusPillTxt, form.status === 'active' && s.statusPillTxtActive]}>Active</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Handmade toggle */}
+              <View style={[s.toggleItem, { borderTopWidth: 1, borderTopColor: '#f3f4f6' }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.toggleLabel}>Handmade / Artisan</Text>
+                  <Text style={s.toggleSub}>Made by hand or local craft</Text>
+                </View>
+                <Switch
+                  value={form.isHandmade}
+                  onValueChange={(v) => setField('isHandmade', v)}
+                  trackColor={{ false: '#e5e7eb', true: '#86efac' }}
+                  thumbColor={form.isHandmade ? '#2d7a47' : '#9ca3af'}
+                />
+              </View>
+            </View>
+
+          </ScrollView>
+
+          {/* Save Button */}
+          <View style={s.footer}>
+            <Pressable
+              style={[s.saveBtn, saving && s.saveBtnDisabled]}
+              onPress={handleSave}
+              disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={s.saveTxt}>{isEdit ? '💾 Save Changes' : '＋ Add Product'}</Text>
+              )}
+            </Pressable>
+          </View>
         </View>
       </View>
     </Modal>
@@ -413,16 +419,23 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
 }
 
 const s = StyleSheet.create({
-  overlay: {
+  // Correct bottom-sheet layout:
+  // flex:1 container + justifyContent:'flex-end' pushes sheet to the bottom.
+  // Backdrop is absoluteFill (not a flex child) so it doesn't consume height.
+  container: {
     flex: 1,
     justifyContent: 'flex-end',
+  },
+  backdrop: {
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '95%',
+  },
+  scrollArea: {
+    maxHeight: 520,
   },
   sheetHead: {
     flexDirection: 'row',
