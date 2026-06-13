@@ -1,5 +1,10 @@
-// Android emulator routes to the host machine via 10.0.2.2, not localhost
-const BASE_URL = 'http://10.0.2.2:3002';
+import { Platform } from 'react-native';
+
+// Android emulator → host machine via 10.0.2.2
+// iOS simulator / web → localhost resolves directly
+const BASE_URL = Platform.OS === 'android'
+  ? 'http://10.0.2.2:3002'
+  : 'http://localhost:3002';
 
 // ── Types (mirror HC_UserSvc/src/types.ts) ────────────────────────────────────
 

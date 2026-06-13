@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { SellerType, ShipsTo, SellerRole, MemberStatus } from '@/services/user-api';
+import type { SellerType, ShipsTo, SellerRole, MemberStatus, Seller } from '@/services/user-api';
 import { getSeller, listMembers } from '@/services/user-api';
 
 // Re-export so screens can import StoreRole from here without coupling to user-api
@@ -49,6 +49,7 @@ interface StoreContextValue {
   loadingStores: boolean;
   loadingTeam: boolean;
   setActiveStore: (store: Store) => void;
+  addStore: (store: Store) => void;  // called after createSeller succeeds
   refreshTeam: () => Promise<void>;
   refreshSeller: (id: string) => Promise<void>;
 }
@@ -231,6 +232,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setActiveStoreId(store.id);
   }, []);
 
+  const addStore = useCallback((store: Store) => {
+    setStoreList(prev => [...prev, store]);
+    setActiveStoreId(store.id);
+  }, []);
+
   return (
     <StoreContext.Provider value={{
       stores: storeList,
@@ -239,6 +245,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       loadingStores,
       loadingTeam,
       setActiveStore: handleSetActiveStore,
+      addStore,
       refreshTeam,
       refreshSeller,
     }}>
@@ -269,6 +276,40 @@ export const DELIVERY_ZONE_CONFIG: Record<ShipsTo, { label: string; icon: string
   state:    { label: 'State Wide',    icon: '🗺️', bg: '#dbeafe', text: '#1e40af' },
   national: { label: 'All India',     icon: '🇮🇳', bg: '#dcfce7', text: '#166534' },
 };
+
+export const SELLER_TYPE_CONFIG: Record<SellerType, { label: string; icon: string; category: string }> = {
+  farmer:   { label: 'Farmer',    icon: '🌾', category: 'Vegetables & Grains' },
+  artisan:  { label: 'Artisan',   icon: '🎨', category: 'Handcraft & Textiles' },
+  dairy:    { label: 'Dairy',     icon: '🥛', category: 'Dairy & Animal Products' },
+  homefood: { label: 'Home Food', icon: '🍱', category: 'Home Foods & Pickles' },
+  trades:   { label: 'Trades',    icon: '🔧', category: 'Services & Trades' },
+};
+
+// Converts a UserSvc Seller response into a Store UI object.
+// role defaults to 'owner' since you only create stores you own.
+export function sellerToStore(seller: Seller, role: SellerRole = 'owner'): Store {
+  const tc = SELLER_TYPE_CONFIG[seller.type];
+  return {
+    id:            seller.id,
+    name:          seller.name,
+    type:          seller.type,
+    category:      tc.category,
+    icon:          tc.icon,
+    description:   seller.description,
+    imageUrl:      seller.imageUrl,
+    location:      seller.location,
+    phone:         seller.phone,
+    pincode:       seller.pincode,
+    deliveryZones: seller.deliveryZones,
+    verified:      seller.verified,
+    fssaiNumber:   seller.fssaiNumber,
+    role,
+    memberCount:   1,
+    productCount:  0,
+    ordersToday:   0,
+    revenueToday:  '₹0',
+  };
+}
 
 export const ROLE_PERMISSIONS: Record<SellerRole, {
   canEditProducts: boolean;
