@@ -95,8 +95,10 @@ const StoreContext = createContext<StoreContextValue | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [storeList, setStoreList]       = useState<Store[]>(STORES);
-  const [activeStoreId, setActiveStoreId] = useState<string>(STORES[0].id);
-  const [teamMembers, setTeamMembers]   = useState<TeamMember[]>(TEAM_SEED[STORES[0].id] ?? []);
+  const [activeStoreId, setActiveStoreId] = useState<string>(STORES[0]?.id ?? '');
+  const [teamMembers, setTeamMembers]   = useState<TeamMember[]>(
+    STORES[0]?.id ? (TEAM_SEED[STORES[0].id] ?? []) : []
+  );
   const [loadingStores, setLoadingStores] = useState(false);
   const [loadingTeam, setLoadingTeam]   = useState(false);
 
@@ -123,6 +125,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch team members whenever active store changes
   const fetchTeam = useCallback(async (sellerId: string) => {
+    if (!sellerId) return;
     setLoadingTeam(true);
     try {
       const members = await listMembers(sellerId);
@@ -240,6 +243,7 @@ export function sellerToStore(seller: Seller, role: SellerRole = 'owner'): Store
     deliveryZones: seller.deliveryZones,
     verified:      seller.verified,
     fssaiNumber:   seller.fssaiNumber,
+    status:        'live',
     role,
     memberCount:   1,
     productCount:  0,
