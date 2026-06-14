@@ -8,6 +8,9 @@ import { StoreSwitcher } from '@/components/store-switcher';
 import { BankAccountModal } from '@/components/bank-account-modal';
 import { CreateStoreModal } from '@/components/create-store-modal';
 import { InviteMemberModal } from '@/components/invite-member-modal';
+import { EditStoreModal } from '@/components/edit-store-modal';
+import { DeliveryZonesModal } from '@/components/delivery-zones-modal';
+import { KycUploadModal } from '@/components/kyc-upload-modal';
 import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG, DELIVERY_ZONE_CONFIG } from '@/context/store-context';
 import { useToast } from '@/components/toast-provider';
 import { getBankAccount, setBankAccount as saveBankAccount, type BankAccount, type CreateBankAccountInput } from '@/services/user-api';
@@ -25,13 +28,13 @@ type MenuItem = {
 };
 
 const menuItems: MenuItem[] = [
-  { icon: '🏪', label: 'Store Settings',      desc: 'Store name, photo, description, category',     comingSoon: true },
+  { icon: '🏪', label: 'Store Settings',      desc: 'Store name, photo, description, category' },
   { icon: '🌾', label: 'My Products',          desc: 'Manage your product catalogue', badge: '6 listed', route: '/products' },
   { icon: '📦', label: 'Order History',        desc: 'All completed and cancelled orders',            route: '/orders' },
   { icon: '💳', label: 'Bank & Payouts',       desc: 'Manage payout account · T+1 settlement', highlight: true, comingSoon: true },
   { icon: '📊', label: 'Transaction History',  desc: 'All credits, debits, and commissions',          comingSoon: true },
-  { icon: '🚚', label: 'Delivery Zones',       desc: 'Mandal, district, state coverage areas',        comingSoon: true },
-  { icon: '🛡️', label: 'KYC & Documents',     desc: 'Aadhaar, FSSAI, bank verification',             comingSoon: true },
+  { icon: '🚚', label: 'Delivery Zones',       desc: 'Mandal, district, state coverage areas' },
+  { icon: '🛡️', label: 'KYC & Documents',     desc: 'Aadhaar, FSSAI, bank verification' },
   { icon: '🎁', label: 'Promotions & Offers',  desc: 'Create discounts and bundle deals' },
   { icon: '📣', label: 'Share My Store',       desc: 'Share your storefront link' },
   { icon: '⭐', label: 'Reviews & Ratings',    desc: '4.8 avg · 342 reviews', badge: '2 new' },
@@ -41,7 +44,7 @@ const menuItems: MenuItem[] = [
 
 
 export default function ProfileScreen() {
-  const { stores, activeStore, teamMembers, loadingTeam, setActiveStore, addStore, refreshTeam } = useStore();
+  const { stores, activeStore, teamMembers, loadingTeam, setActiveStore, addStore, refreshTeam, refreshSeller } = useStore();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const router = useRouter();
   const { showToast } = useToast();
@@ -50,6 +53,9 @@ export default function ProfileScreen() {
   const [bankModalOpen, setBankModalOpen]        = useState(false);
   const [createStoreOpen, setCreateStoreOpen]   = useState(false);
   const [inviteModalOpen, setInviteModalOpen]   = useState(false);
+  const [editStoreOpen,   setEditStoreOpen]     = useState(false);
+  const [zonesOpen,       setZonesOpen]         = useState(false);
+  const [kycOpen,         setKycOpen]           = useState(false);
   const [productCount, setProductCount]         = useState<number | null>(null);
   const [orderCount, setOrderCount]             = useState<number | null>(null);
 
@@ -71,12 +77,17 @@ export default function ProfileScreen() {
     showToast('Bank account saved successfully.', 'success');
   }
 
+  async function handleStoreUpdated() {
+    await refreshSeller(activeStore.id);
+    showToast('Store updated successfully.', 'success');
+  }
+
   function handleMenuPress(item: MenuItem) {
-    if (item.route) {
-      router.push(item.route as string);
-    } else if (item.comingSoon) {
-      showToast(`${item.label} is coming soon.`, 'info');
-    }
+    if (item.label === 'Store Settings')  { setEditStoreOpen(true); return; }
+    if (item.label === 'Delivery Zones')  { setZonesOpen(true); return; }
+    if (item.label === 'KYC & Documents') { setKycOpen(true); return; }
+    if (item.route) { router.push(item.route as string); return; }
+    if (item.comingSoon) { showToast(`${item.label} is coming soon.`, 'info'); }
   }
 
   function handleLogout() {
@@ -133,6 +144,27 @@ export default function ProfileScreen() {
           showToast('Invite sent successfully!', 'success');
         }}
       />
+      <EditStoreModal
+        visible={editStoreOpen}
+        store={activeStore}
+        onClose={() => setEditStoreOpen(false)}
+        onUpdated={handleStoreUpdated}
+      />
+      <DeliveryZonesModal
+        visible={zonesOpen}
+        sellerId={activeStore.id}
+        currentZones={activeStore.deliveryZones}
+        onClose={() => setZonesOpen(false)}
+        onUpdated={handleStoreUpdated}
+      />
+      <KycUploadModal
+        visible={kycOpen}
+        sellerId={activeStore.id}
+        currentFssai={activeStore.fssaiNumber}
+        verified={activeStore.verified}
+        onClose={() => setKycOpen(false)}
+        onUpdated={handleStoreUpdated}
+      />
       {/* Header */}
       <View style={s.header}>
         <SafeAreaView edges={['top']}>
@@ -155,7 +187,15 @@ export default function ProfileScreen() {
                 <Text style={s.locationTxt}>📍 {activeStore.location}</Text>
               </View>
             </View>
-            <Pressable style={s.editBtn}>
+            <Pressable
+              style={s.editBtn}
+              onPress={() => {
+                if (activeStore.role !== 'owner') {
+                  showToast('Only store owners can edit store details.', 'info');
+                  return;
+                }
+                setEditStoreOpen(true);
+              }}>
               <Text style={{ fontSize: 16 }}>✏️</Text>
             </Pressable>
           </View>
@@ -211,7 +251,7 @@ export default function ProfileScreen() {
         <View style={s.coverageCard}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
             <Text style={s.coverageTitle}>Delivery Coverage</Text>
-            <Pressable><Text style={s.editCoverage}>Edit ›</Text></Pressable>
+            <Pressable onPress={() => setZonesOpen(true)}><Text style={s.editCoverage}>Edit ›</Text></Pressable>
           </View>
           <View style={s.coverageBadges}>
             {activeStore.deliveryZones.length > 0 ? (
