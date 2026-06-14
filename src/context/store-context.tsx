@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { SellerType, ShipsTo, SellerRole, MemberStatus, Seller } from '@/services/user-api';
-import { getSeller, listMembers } from '@/services/user-api';
+import { getSeller, listMembers, getSellersByUser } from '@/services/user-api';
+import { useAuth } from '@/context/auth-context';
 
 // Re-export so screens can import StoreRole from here without coupling to user-api
 export type { SellerRole as StoreRole };
@@ -96,35 +97,41 @@ function mergeLiveSeller(seed: Store, live: Awaited<ReturnType<typeof getSeller>
 const StoreContext = createContext<StoreContextValue | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [storeList, setStoreList]       = useState<Store[]>(STORES);
-  const [activeStoreId, setActiveStoreId] = useState<string>(STORES[0]?.id ?? '');
-  const [teamMembers, setTeamMembers]   = useState<TeamMember[]>(
-    STORES[0]?.id ? (TEAM_SEED[STORES[0].id] ?? []) : []
-  );
+  const { session } = useAuth();
+  const userId = session?.userId ?? null;
+
+  const [storeList, setStoreList]         = useState<Store[]>([]);
+  const [activeStoreId, setActiveStoreId] = useState<string>('');
+  const [teamMembers, setTeamMembers]     = useState<TeamMember[]>([]);
   const [loadingStores, setLoadingStores] = useState(false);
-  const [loadingTeam, setLoadingTeam]   = useState(false);
+  const [loadingTeam, setLoadingTeam]     = useState(false);
   const [newOrderCount, setNewOrderCount] = useState(0);
 
   const activeStore = storeList.find(s => s.id === activeStoreId) ?? storeList[0];
 
-  // Fetch live seller data for all stores on mount
+  // Fetch stores for the logged-in user; clear on logout
   useEffect(() => {
-    async function fetchAllStores() {
+    if (!userId) {
+      setStoreList([]);
+      setActiveStoreId('');
+      setTeamMembers([]);
+      return;
+    }
+    async function fetchUserStores() {
       setLoadingStores(true);
       try {
-        const results = await Promise.all(
-          STORES.map(seed => getSeller(seed.id).catch(() => null))
-        );
-        setStoreList(STORES.map((seed, i) => {
-          const live = results[i];
-          return live ? mergeLiveSeller(seed, live) : seed;
-        }));
+        const sellers = await getSellersByUser(userId);
+        const stores  = sellers.map(s => sellerToStore(s));
+        setStoreList(stores);
+        if (stores.length > 0) setActiveStoreId(prev => prev || stores[0].id);
+      } catch {
+        setStoreList([]);
       } finally {
         setLoadingStores(false);
       }
     }
-    fetchAllStores();
-  }, []);
+    fetchUserStores();
+  }, [userId]);
 
   // Fetch team members whenever active store changes
   const fetchTeam = useCallback(async (sellerId: string) => {
@@ -157,11 +164,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     try {
       const live = await getSeller(id);
       setStoreList(prev =>
-        prev.map(s => {
-          const seed = STORES.find(ss => ss.id === id);
-          if (s.id !== id || !seed) return s;
-          return { ...mergeLiveSeller(seed, live), status: s.status };
-        })
+        prev.map(s => s.id !== id ? s : { ...mergeLiveSeller(s, live), status: s.status })
       );
     } catch { /* silent — keep current data */ }
   }, []);
