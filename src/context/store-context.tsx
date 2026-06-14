@@ -49,6 +49,8 @@ interface StoreContextValue {
   teamMembers: TeamMember[];     // live members for the active store only
   loadingStores: boolean;
   loadingTeam: boolean;
+  newOrderCount: number;         // live count of 'new' orders — drives tab badge
+  setNewOrderCount: (n: number) => void;
   setActiveStore: (store: Store) => void;
   addStore: (store: Store) => void;  // called after createSeller succeeds
   updateStoreStatus: (id: string, status: 'live' | 'offline') => void;
@@ -101,6 +103,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
   const [loadingStores, setLoadingStores] = useState(false);
   const [loadingTeam, setLoadingTeam]   = useState(false);
+  const [newOrderCount, setNewOrderCount] = useState(0);
 
   const activeStore = storeList.find(s => s.id === activeStoreId) ?? storeList[0];
 
@@ -183,6 +186,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       teamMembers,
       loadingStores,
       loadingTeam,
+      newOrderCount,
+      setNewOrderCount,
       setActiveStore: handleSetActiveStore,
       addStore,
       updateStoreStatus,

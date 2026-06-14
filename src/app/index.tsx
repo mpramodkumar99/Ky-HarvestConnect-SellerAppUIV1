@@ -25,12 +25,6 @@ const quickActions: { icon: string; label: string; color: string; bg: string; ro
   { icon: '📈', label: 'Analytics',      color: '#7c3aed', bg: '#ede9fe', route: '/analytics' },
 ];
 
-const storeHealth = [
-  { label: 'Fulfilment Rate', value: '96%',    icon: '✅', good: true },
-  { label: 'Avg Response',    value: '18 min',  icon: '⚡', good: true },
-  { label: 'Store Rating',    value: '4.8★',   icon: '⭐', good: true },
-  { label: 'Return Rate',     value: '2.1%',   icon: '↩️', good: true },
-];
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -51,7 +45,7 @@ function getGreeting(storeName: string): string {
 }
 
 export default function DashboardScreen() {
-  const { activeStore } = useStore();
+  const { activeStore, setNewOrderCount } = useStore();
   const router = useRouter();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -129,21 +123,53 @@ export default function DashboardScreen() {
   const newCount      = orders.filter((o) => toSellerTab(o.status) === 'new').length;
   const pendingCount  = orders.filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status))).length;
 
+  // Sync new order count into context so the tab badge stays live
+  useEffect(() => { setNewOrderCount(newCount); }, [newCount, setNewOrderCount]);
+
   // Payout — 93% of all delivered orders (7% commission deducted)
   const deliveredOrders = orders.filter((o) => o.status === 'delivered');
-  const grossAmount       = Math.round(deliveredOrders.reduce((s, o) => s + o.total, 0) / 100);
+  const grossAmount        = Math.round(deliveredOrders.reduce((s, o) => s + o.total, 0) / 100);
   const availableForPayout = Math.round(grossAmount * 0.93);
+
+  // Today's revenue — delivered orders created today
+  const todayStr = new Date().toDateString();
+  const deliveredToday = deliveredOrders.filter(
+    (o) => new Date(o.updatedAt ?? o.createdAt).toDateString() === todayStr
+  );
+  const todayRevenue = Math.round(deliveredToday.reduce((s, o) => s + o.total, 0) / 100);
+  const todayRevenueStr = todayRevenue > 0
+    ? `₹${todayRevenue.toLocaleString('en-IN')}`
+    : orders.length === 0 ? '—' : '₹0';
 
   const incomingOrders = orders
     .filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status)))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
+  // Store Health — compute what we can from order data
+  const totalOrders     = orders.filter((o) => o.status !== 'cancelled').length + orders.filter((o) => o.status === 'cancelled').length;
+  const cancelledCount  = orders.filter((o) => o.status === 'cancelled').length;
+  const fulfilledCount  = deliveredOrders.length;
+  const nonCancelled    = orders.filter((o) => o.status !== 'cancelled').length;
+  const fulfilmentRate  = nonCancelled > 0
+    ? `${Math.round((fulfilledCount / nonCancelled) * 100)}%`
+    : orders.length === 0 ? '—' : '100%';
+  const returnRate = totalOrders > 0
+    ? `${((cancelledCount / totalOrders) * 100).toFixed(1)}%`
+    : '—';
+
+  const storeHealth = [
+    { label: 'Fulfilment Rate', value: fulfilmentRate, icon: '✅' },
+    { label: 'Avg Response',    value: '—',            icon: '⚡' },
+    { label: 'Store Rating',    value: '—',            icon: '⭐' },
+    { label: 'Cancel Rate',     value: returnRate,     icon: '↩️' },
+  ];
+
   const stats = [
-    { label: "Today's Revenue", value: '₹4,280',       icon: '💰', trend: '+12%', up: true },
-    { label: 'New Orders',      value: String(newCount),    icon: '📦', trend: '',      up: true },
-    { label: 'Pending',         value: String(pendingCount), icon: '⏳', trend: '',      up: false },
-    { label: 'Store Views',     value: '312',           icon: '👁️', trend: '+28%', up: true },
+    { label: "Today's Revenue", value: todayRevenueStr,    icon: '💰', trend: '', up: true },
+    { label: 'New Orders',      value: String(newCount),   icon: '📦', trend: '', up: true },
+    { label: 'Pending',         value: String(pendingCount), icon: '⏳', trend: '', up: false },
+    { label: 'Store Views',     value: '—',                icon: '👁️', trend: '', up: true },
   ];
 
   return (

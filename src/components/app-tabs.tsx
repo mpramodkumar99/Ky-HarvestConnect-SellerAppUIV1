@@ -8,6 +8,7 @@ import {
 } from 'expo-router/ui';
 import { Pressable, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useStore } from '@/context/store-context';
 
 type TabButtonProps = TabTriggerSlotProps & { icon?: string; badge?: number };
 
@@ -39,6 +40,7 @@ function BottomBar({ children, ...props }: TabListProps) {
 }
 
 export default function AppTabs() {
+  const { newOrderCount } = useStore();
   return (
     <Tabs>
       <TabSlot style={{ flex: 1 }} />
@@ -54,7 +56,7 @@ export default function AppTabs() {
           </TabTrigger>
           {/* @ts-ignore */}
           <TabTrigger name="orders" href="/orders" asChild>
-            <TabButton icon="📦" badge={3}>Orders</TabButton>
+            <TabButton icon="📦" badge={newOrderCount || undefined}>Orders</TabButton>
           </TabTrigger>
           {/* @ts-ignore */}
           <TabTrigger name="analytics" href="/analytics" asChild>

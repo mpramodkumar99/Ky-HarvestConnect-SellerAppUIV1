@@ -36,7 +36,7 @@ function nextAction(order: Order): { label: string; color: string; bg: string } 
 }
 
 export default function OrdersScreen() {
-  const { activeStore } = useStore();
+  const { activeStore, setNewOrderCount } = useStore();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SellerTab>('new');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -65,6 +65,11 @@ export default function OrdersScreen() {
   function tabCount(tab: SellerTab) {
     return orders.filter((o) => toSellerTab(o.status) === tab).length;
   }
+
+  // Keep tab badge in sync whenever orders change
+  useEffect(() => {
+    setNewOrderCount(tabCount('new'));
+  }, [orders, setNewOrderCount]);
 
   const filtered = orders
     .filter((o) => toSellerTab(o.status) === activeTab)
