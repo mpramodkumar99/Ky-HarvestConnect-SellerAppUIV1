@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import { KycBadge, RoleBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
 import { BankAccountModal } from '@/components/bank-account-modal';
-import { CreateStoreModal } from '@/components/create-store-modal';
 import { InviteMemberModal } from '@/components/invite-member-modal';
 import { EditStoreModal } from '@/components/edit-store-modal';
 import { DeliveryZonesModal } from '@/components/delivery-zones-modal';
@@ -44,14 +43,13 @@ const menuItems: MenuItem[] = [
 
 
 export default function ProfileScreen() {
-  const { stores, activeStore, teamMembers, loadingTeam, setActiveStore, addStore, refreshTeam, refreshSeller } = useStore();
+  const { stores, activeStore, teamMembers, loadingTeam, setActiveStore, refreshTeam, refreshSeller } = useStore();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const router = useRouter();
   const { showToast } = useToast();
   const [switcherOpen, setSwitcherOpen]         = useState(false);
   const [bankAccount, setBankAccountState]       = useState<BankAccount | null>(null);
   const [bankModalOpen, setBankModalOpen]        = useState(false);
-  const [createStoreOpen, setCreateStoreOpen]   = useState(false);
   const [inviteModalOpen, setInviteModalOpen]   = useState(false);
   const [editStoreOpen,   setEditStoreOpen]     = useState(false);
   const [zonesOpen,       setZonesOpen]         = useState(false);
@@ -126,14 +124,6 @@ export default function ProfileScreen() {
         existing={bankAccount}
         onSave={handleSaveBankAccount}
         onClose={() => setBankModalOpen(false)}
-      />
-      <CreateStoreModal
-        visible={createStoreOpen}
-        onCreated={(store) => {
-          addStore(store);
-          showToast(`${store.name} created! Upload KYC to get verified.`, 'success');
-        }}
-        onClose={() => setCreateStoreOpen(false)}
       />
       <InviteMemberModal
         visible={inviteModalOpen}
@@ -292,14 +282,9 @@ export default function ProfileScreen() {
       <View style={s.sectionWrap}>
         <View style={s.sectionHead}>
           <Text style={s.sectionTitle}>My Stores</Text>
-          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-            <Pressable onPress={() => setSwitcherOpen(true)}>
-              <Text style={s.seeAll}>Switch ›</Text>
-            </Pressable>
-            <Pressable style={s.newStoreBtn} onPress={() => setCreateStoreOpen(true)}>
-              <Text style={s.newStoreBtnTxt}>＋ New</Text>
-            </Pressable>
-          </View>
+          <Pressable onPress={() => setSwitcherOpen(true)}>
+            <Text style={s.seeAll}>Switch ›</Text>
+          </Pressable>
         </View>
         <View style={{ gap: 8 }}>
           {stores.map((store) => {
@@ -638,14 +623,6 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
   sectionSub: { fontSize: 11, color: '#6b7280', marginTop: 2 },
   seeAll: { fontSize: 12, color: '#2d7a47', fontWeight: '600' },
-  newStoreBtn: {
-    backgroundColor: '#2d7a47',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  newStoreBtnTxt: { fontSize: 11, fontWeight: '700', color: '#fff' },
-
   storeCard: {
     flexDirection: 'row',
     alignItems: 'center',

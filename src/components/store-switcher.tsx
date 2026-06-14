@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 
 import { useStore, ROLE_CONFIG } from '@/context/store-context';
+import { CreateStoreModal } from '@/components/create-store-modal';
+import { useToast } from '@/components/toast-provider';
 
 interface Props {
   visible: boolean;
@@ -8,9 +11,22 @@ interface Props {
 }
 
 export function StoreSwitcher({ visible, onClose }: Props) {
-  const { stores, activeStore, setActiveStore } = useStore();
+  const { stores, activeStore, setActiveStore, addStore } = useStore();
+  const { showToast } = useToast();
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
+    <>
+    <CreateStoreModal
+      visible={createOpen}
+      onCreated={(store) => {
+        addStore(store);
+        setCreateOpen(false);
+        onClose();
+        showToast(`${store.name} created! Upload KYC to get verified.`, 'success');
+      }}
+      onClose={() => setCreateOpen(false)}
+    />
     <Modal
       visible={visible}
       transparent
@@ -84,7 +100,7 @@ export function StoreSwitcher({ visible, onClose }: Props) {
         </ScrollView>
 
         <View style={s.footer}>
-          <Pressable style={s.newStoreBtn}>
+          <Pressable style={s.newStoreBtn} onPress={() => setCreateOpen(true)}>
             <Text style={s.newStoreIcon}>＋</Text>
             <View>
               <Text style={s.newStoreTxt}>Create New Store</Text>
@@ -95,6 +111,7 @@ export function StoreSwitcher({ visible, onClose }: Props) {
       </View>
       </View>
     </Modal>
+    </>
   );
 }
 
