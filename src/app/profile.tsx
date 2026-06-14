@@ -14,6 +14,7 @@ import { PromotionsModal } from '@/components/promotions-modal';
 import { ReviewsModal } from '@/components/reviews-modal';
 import { HelpSupportModal } from '@/components/help-support-modal';
 import { AppSettingsModal } from '@/components/app-settings-modal';
+import { EditProfileModal } from '@/components/edit-profile-modal';
 import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG, DELIVERY_ZONE_CONFIG } from '@/context/store-context';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/components/toast-provider';
@@ -32,6 +33,7 @@ type MenuItem = {
 };
 
 const menuItems: MenuItem[] = [
+  { icon: '👤', label: 'Personal Info',        desc: 'Name and email on your account' },
   { icon: '🏪', label: 'Store Settings',      desc: 'Store name, photo, description, category' },
   { icon: '🌾', label: 'My Products',          desc: 'Manage your product catalogue', route: '/products' },
   { icon: '📦', label: 'Order History',        desc: 'All completed and cancelled orders',            route: '/orders' },
@@ -64,6 +66,7 @@ export default function ProfileScreen() {
   const [reviewsOpen,     setReviewsOpen]       = useState(false);
   const [helpOpen,        setHelpOpen]          = useState(false);
   const [settingsOpen,    setSettingsOpen]      = useState(false);
+  const [editProfileOpen, setEditProfileOpen]   = useState(false);
   const [productCount, setProductCount]         = useState<number | null>(null);
   const [orderCount, setOrderCount]             = useState<number | null>(null);
 
@@ -91,6 +94,7 @@ export default function ProfileScreen() {
   }
 
   function handleMenuPress(item: MenuItem) {
+    if (item.label === 'Personal Info')      { setEditProfileOpen(true); return; }
     if (item.label === 'Store Settings')     { setEditStoreOpen(true); return; }
     if (item.label === 'Delivery Zones')     { setZonesOpen(true); return; }
     if (item.label === 'KYC & Documents')   { setKycOpen(true); return; }
@@ -201,6 +205,14 @@ export default function ProfileScreen() {
       <AppSettingsModal
         visible={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+      <EditProfileModal
+        visible={editProfileOpen}
+        onClose={() => setEditProfileOpen(false)}
+        onUpdated={(name) => {
+          setEditProfileOpen(false);
+          showToast(`Profile updated — welcome, ${name}!`, 'success');
+        }}
       />
       {/* Header */}
       <View style={s.header}>
