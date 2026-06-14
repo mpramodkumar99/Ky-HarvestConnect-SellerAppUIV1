@@ -312,6 +312,7 @@ export async function activateMember(
 ): Promise<SellerMember> {
   return request<SellerMember>(`/v1/sellers/${sellerId}/members/${memberId}/activate`, {
     method: 'PATCH',
+    body: '{}',
     headers: { 'X-User-Id': userId },
   });
 }
@@ -319,6 +320,7 @@ export async function activateMember(
 export async function removeMember(sellerId: string, memberId: string): Promise<void> {
   return request<void>(`/v1/sellers/${sellerId}/members/${memberId}`, {
     method: 'DELETE',
+    body: '{}',
   });
 }
 
