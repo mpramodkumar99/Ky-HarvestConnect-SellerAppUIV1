@@ -9,12 +9,14 @@ import { useRouter } from 'expo-router';
 import { HarvestDivider, OrderStatusBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
 import { DeclineReasonModal } from '@/components/decline-reason-modal';
+import { PayoutModal } from '@/components/payout-modal';
 import { useStore } from '@/context/store-context';
 import {
   listOrders, updateOrderStatus, cancelOrder,
   toSellerTab,
   type Order,
 } from '@/services/order-api';
+import { getBankAccount, type BankAccount } from '@/services/user-api';
 
 const quickActions: { icon: string; label: string; color: string; bg: string; route: string | null }[] = [
   { icon: '➕', label: 'Add Product',    color: '#2d7a47', bg: '#dcfce7', route: '/products' },
@@ -57,6 +59,8 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [declineOrder, setDeclineOrder] = useState<Order | null>(null);
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -71,6 +75,12 @@ export default function DashboardScreen() {
   }, [activeStore.id]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  useEffect(() => {
+    getBankAccount(activeStore.id)
+      .then(setBankAccount)
+      .catch(() => setBankAccount(null));
+  }, [activeStore.id]);
 
   function updateOrderInState(updated: Order) {
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
@@ -119,6 +129,11 @@ export default function DashboardScreen() {
   const newCount      = orders.filter((o) => toSellerTab(o.status) === 'new').length;
   const pendingCount  = orders.filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status))).length;
 
+  // Payout — 93% of all delivered orders (7% commission deducted)
+  const deliveredOrders = orders.filter((o) => o.status === 'delivered');
+  const grossAmount       = Math.round(deliveredOrders.reduce((s, o) => s + o.total, 0) / 100);
+  const availableForPayout = Math.round(grossAmount * 0.93);
+
   const incomingOrders = orders
     .filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status)))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -153,6 +168,14 @@ export default function DashboardScreen() {
         onConfirm={handleDeclineConfirm}
         loading={declineOrder ? actionLoading === declineOrder.id : false}
       />
+      <PayoutModal
+        visible={payoutOpen}
+        availableAmount={availableForPayout}
+        grossAmount={grossAmount}
+        deliveredCount={deliveredOrders.length}
+        bankAccount={bankAccount}
+        onClose={() => setPayoutOpen(false)}
+      />
 
       {/* Header */}
       <View style={s.header}>
@@ -180,11 +203,13 @@ export default function DashboardScreen() {
           </View>
 
           {/* Payout Banner */}
-          <Pressable style={s.payoutBanner}>
+          <Pressable style={s.payoutBanner} onPress={() => setPayoutOpen(true)}>
             <Text style={s.payoutIcon}>💳</Text>
             <View style={{ flex: 1 }}>
-              <Text style={s.payoutTitle}>₹12,480 available for payout</Text>
-              <Text style={s.payoutSub}>T+1 settlement · Last paid: Jun 11</Text>
+              <Text style={s.payoutTitle}>
+                ₹{availableForPayout.toLocaleString('en-IN')} available for payout
+              </Text>
+              <Text style={s.payoutSub}>T+1 settlement · Tap to request</Text>
             </View>
             <Text style={s.payoutArrow}>›</Text>
           </Pressable>
@@ -218,7 +243,10 @@ export default function DashboardScreen() {
             <Pressable
               key={a.label}
               style={s.actionBtn}
-              onPress={() => { if (a.route) router.push(a.route as any); }}>
+              onPress={() => {
+                if (a.label === 'Request Payout') { setPayoutOpen(true); return; }
+                if (a.route) router.push(a.route as any);
+              }}>
               <View style={[s.actionIcon, { backgroundColor: a.bg }]}>
                 <Text style={{ fontSize: 20 }}>{a.icon}</Text>
               </View>

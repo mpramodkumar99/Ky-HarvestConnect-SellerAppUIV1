@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Alert, ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Alert, Share, ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -10,6 +10,10 @@ import { InviteMemberModal } from '@/components/invite-member-modal';
 import { EditStoreModal } from '@/components/edit-store-modal';
 import { DeliveryZonesModal } from '@/components/delivery-zones-modal';
 import { KycUploadModal } from '@/components/kyc-upload-modal';
+import { PromotionsModal } from '@/components/promotions-modal';
+import { ReviewsModal } from '@/components/reviews-modal';
+import { HelpSupportModal } from '@/components/help-support-modal';
+import { AppSettingsModal } from '@/components/app-settings-modal';
 import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG, DELIVERY_ZONE_CONFIG } from '@/context/store-context';
 import { useToast } from '@/components/toast-provider';
 import { getBankAccount, setBankAccount as saveBankAccount, type BankAccount, type CreateBankAccountInput } from '@/services/user-api';
@@ -54,6 +58,10 @@ export default function ProfileScreen() {
   const [editStoreOpen,   setEditStoreOpen]     = useState(false);
   const [zonesOpen,       setZonesOpen]         = useState(false);
   const [kycOpen,         setKycOpen]           = useState(false);
+  const [promosOpen,      setPromosOpen]        = useState(false);
+  const [reviewsOpen,     setReviewsOpen]       = useState(false);
+  const [helpOpen,        setHelpOpen]          = useState(false);
+  const [settingsOpen,    setSettingsOpen]      = useState(false);
   const [productCount, setProductCount]         = useState<number | null>(null);
   const [orderCount, setOrderCount]             = useState<number | null>(null);
 
@@ -81,9 +89,20 @@ export default function ProfileScreen() {
   }
 
   function handleMenuPress(item: MenuItem) {
-    if (item.label === 'Store Settings')  { setEditStoreOpen(true); return; }
-    if (item.label === 'Delivery Zones')  { setZonesOpen(true); return; }
-    if (item.label === 'KYC & Documents') { setKycOpen(true); return; }
+    if (item.label === 'Store Settings')     { setEditStoreOpen(true); return; }
+    if (item.label === 'Delivery Zones')     { setZonesOpen(true); return; }
+    if (item.label === 'KYC & Documents')   { setKycOpen(true); return; }
+    if (item.label === 'Promotions & Offers') { setPromosOpen(true); return; }
+    if (item.label === 'Reviews & Ratings') { setReviewsOpen(true); return; }
+    if (item.label === 'Help & Support')    { setHelpOpen(true); return; }
+    if (item.label === 'App Settings')      { setSettingsOpen(true); return; }
+    if (item.label === 'Share My Store') {
+      Share.share({
+        message: `Shop fresh from ${activeStore.name} on HarvestConnect!\n\nhttps://harvestconnect.in/store/${activeStore.id}`,
+        title: activeStore.name,
+      });
+      return;
+    }
     if (item.route) { router.push(item.route as string); return; }
     if (item.comingSoon) { showToast(`${item.label} is coming soon.`, 'info'); }
   }
@@ -154,6 +173,23 @@ export default function ProfileScreen() {
         verified={activeStore.verified}
         onClose={() => setKycOpen(false)}
         onUpdated={handleStoreUpdated}
+      />
+      <PromotionsModal
+        visible={promosOpen}
+        store={activeStore}
+        onClose={() => setPromosOpen(false)}
+      />
+      <ReviewsModal
+        visible={reviewsOpen}
+        onClose={() => setReviewsOpen(false)}
+      />
+      <HelpSupportModal
+        visible={helpOpen}
+        onClose={() => setHelpOpen(false)}
+      />
+      <AppSettingsModal
+        visible={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
       />
       {/* Header */}
       <View style={s.header}>
