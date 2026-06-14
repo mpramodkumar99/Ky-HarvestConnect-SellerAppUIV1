@@ -1,19 +1,41 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { normalizePhone, requestOtp, verifyOtp } from '@/services/auth-api';
+import { normalizePhone, requestOtp, verifyOtp, type AuthSession } from '@/services/auth-api';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/components/toast-provider';
 
 type Screen = 'welcome' | 'phone' | 'otp';
 
+function isNetworkError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message.toLowerCase() : '';
+  return msg.includes('network request failed') || msg.includes('fetch') || msg.includes('failed to fetch');
+}
+
+// Dev-only: bypasses AuthSvc entirely — no network needed
+const DEV_SESSION: AuthSession = {
+  token:     'dev-token-s112',
+  userId:    'user-s112',
+  userType:  'seller',
+  sessionId: 'dev-session-s112',
+  expiresAt: new Date(Date.now() + 86400 * 1000).toISOString(),
+};
+
 // ── Welcome ───────────────────────────────────────────────────────────────────
 
 function WelcomeScreen({ onNext }: { onNext: () => void }) {
+  const { login } = useAuth();
+  const { showToast } = useToast();
+
+  async function devLogin() {
+    await login(DEV_SESSION);
+    showToast('Dev login — AuthSvc bypassed.', 'info');
+  }
+
   return (
     <View style={w.screen}>
       <SafeAreaView style={w.safe} edges={['top', 'bottom']}>
@@ -54,6 +76,12 @@ function WelcomeScreen({ onNext }: { onNext: () => void }) {
             <Text style={w.ctaArrow}>→</Text>
           </Pressable>
           <Text style={w.note}>Already a seller? Log in with your registered phone.</Text>
+
+          {__DEV__ && (
+            <Pressable style={w.devBtn} onPress={devLogin}>
+              <Text style={w.devBtnTxt}>⚡ Dev Login (skip AuthSvc)</Text>
+            </Pressable>
+          )}
         </View>
 
       </SafeAreaView>
@@ -66,11 +94,8 @@ const w = StyleSheet.create({
   safe:   { flex: 1, paddingHorizontal: 28 },
 
   top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: 24,
-    paddingBottom: 36,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingTop: 24, paddingBottom: 36,
   },
   logoRing: {
     width: 44, height: 44, borderRadius: 22,
@@ -79,7 +104,7 @@ const w = StyleSheet.create({
     borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
   },
   logoIcon: { fontSize: 22 },
-  brand: { fontSize: 18, fontWeight: '800', color: '#fff', flex: 1 },
+  brand:    { fontSize: 18, fontWeight: '800', color: '#fff', flex: 1 },
   sellerPill: {
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3,
@@ -90,7 +115,7 @@ const w = StyleSheet.create({
   title: { fontSize: 38, fontWeight: '900', color: '#fff', lineHeight: 46, marginBottom: 14 },
   sub:   { fontSize: 15, color: 'rgba(255,255,255,0.72)', lineHeight: 22 },
 
-  features: { gap: 14, marginBottom: 'auto' as unknown as number },
+  features: { gap: 14, flex: 1 },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   featureIcon: { fontSize: 22, width: 32, textAlign: 'center' },
   featureTxt:  { fontSize: 14, color: 'rgba(255,255,255,0.85)', flex: 1, lineHeight: 20 },
@@ -103,6 +128,12 @@ const w = StyleSheet.create({
   ctaTxt:   { fontSize: 16, fontWeight: '800', color: '#1a4a28' },
   ctaArrow: { fontSize: 18, fontWeight: '700', color: '#1a4a28' },
   note: { fontSize: 12, color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
+  devBtn: {
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 12, paddingVertical: 10,
+    alignItems: 'center', borderStyle: 'dashed',
+  },
+  devBtnTxt: { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: '600' },
 });
 
 // ── Phone Entry ───────────────────────────────────────────────────────────────
@@ -111,7 +142,7 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
   const [phone,   setPhone]   = useState('');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
-  const { showToast } = useToast();
+  const [offline, setOffline] = useState(false);
 
   const digits = phone.replace(/\D/g, '');
   const canSubmit = digits.length === 10 && !loading;
@@ -120,16 +151,17 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
     if (!canSubmit) return;
     setLoading(true);
     setError('');
+    setOffline(false);
     try {
       const normalized = normalizePhone(phone);
       await requestOtp(normalized);
       onNext(normalized);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to send OTP.';
-      setError(msg);
-      // Dev hint — OTP always succeeds if phone exists in UserSvc seed
-      if (msg.toLowerCase().includes('no account')) {
-        showToast('Phone not found. Using dev OTP: try 9000000112', 'info');
+      if (isNetworkError(err)) {
+        setOffline(true);
+        setError('Cannot reach AuthSvc. Make sure it\'s running on port 3001.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to send OTP. Try again.');
       }
     } finally {
       setLoading(false);
@@ -160,7 +192,7 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
               <TextInput
                 style={p.input}
                 value={phone}
-                onChangeText={(t) => { setPhone(t); setError(''); }}
+                onChangeText={(t) => { setPhone(t); setError(''); setOffline(false); }}
                 placeholder="00000 00000"
                 placeholderTextColor="#9ca3af"
                 keyboardType="phone-pad"
@@ -172,13 +204,20 @@ function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBa
             </View>
 
             {error ? (
-              <View style={p.errorBox}>
-                <Text style={p.errorTxt}>{error}</Text>
+              <View style={[p.errorBox, offline && p.offlineBox]}>
+                <Text style={[p.errorTxt, offline && p.offlineTxt]}>{error}</Text>
+                {offline && __DEV__ && (
+                  <Text style={p.offlineHint}>
+                    Dev tip: tap "Go Back" and use ⚡ Dev Login to bypass.
+                  </Text>
+                )}
               </View>
             ) : null}
 
             <Text style={p.hint}>
-              {__DEV__ ? 'Dev: use any 10-digit number ending in a valid UserSvc seller phone (e.g. 9000000112). OTP will be 123456.' : 'Standard call/SMS rates may apply.'}
+              {__DEV__
+                ? 'Dev: phone 9000000112 maps to seller-112 seed. OTP is 123456.'
+                : 'Standard SMS rates may apply.'}
             </Text>
           </View>
 
@@ -204,11 +243,16 @@ const p = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f9fafb' },
   safe:   { flex: 1, paddingHorizontal: 24 },
 
-  back: { paddingTop: 16, paddingBottom: 8 },
+  back:    { paddingTop: 16, paddingBottom: 8 },
   backTxt: { fontSize: 14, fontWeight: '600', color: '#2d7a47' },
 
-  body:    { flex: 1, justifyContent: 'center', paddingBottom: 40 },
-  iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#f0fdf4', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2, borderColor: '#bbf7d0' },
+  body:     { flex: 1, justifyContent: 'center', paddingBottom: 40 },
+  iconWrap: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 20, borderWidth: 2, borderColor: '#bbf7d0',
+  },
   title: { fontSize: 30, fontWeight: '800', color: '#111827', lineHeight: 38, marginBottom: 10 },
   sub:   { fontSize: 14, color: '#6b7280', lineHeight: 21, marginBottom: 28 },
 
@@ -223,7 +267,7 @@ const p = StyleSheet.create({
     borderRightWidth: 1, borderRightColor: '#e5e7eb',
     backgroundColor: '#f9fafb',
   },
-  flag: { fontSize: 18 },
+  flag:      { fontSize: 18 },
   prefixTxt: { fontSize: 15, fontWeight: '700', color: '#111827' },
   input: {
     flex: 1, paddingHorizontal: 16, paddingVertical: 16,
@@ -234,17 +278,17 @@ const p = StyleSheet.create({
     backgroundColor: '#fff5f5', borderRadius: 10, padding: 12,
     borderWidth: 1, borderColor: '#fca5a5', marginBottom: 12,
   },
-  errorTxt: { fontSize: 12, color: '#dc2626', lineHeight: 17 },
+  offlineBox:  { backgroundColor: '#fffbeb', borderColor: '#fde68a' },
+  errorTxt:    { fontSize: 12, color: '#dc2626', lineHeight: 17 },
+  offlineTxt:  { color: '#92400e' },
+  offlineHint: { fontSize: 11, color: '#b45309', marginTop: 6 },
 
   hint: { fontSize: 11, color: '#9ca3af', lineHeight: 16 },
 
-  footer: { paddingBottom: 12 },
-  sendBtn: {
-    backgroundColor: '#2d7a47', borderRadius: 16,
-    paddingVertical: 17, alignItems: 'center',
-  },
+  footer:          { paddingBottom: 12 },
+  sendBtn:         { backgroundColor: '#2d7a47', borderRadius: 16, paddingVertical: 17, alignItems: 'center' },
   sendBtnDisabled: { opacity: 0.45 },
-  sendTxt: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  sendTxt:         { fontSize: 16, fontWeight: '800', color: '#fff' },
 });
 
 // ── OTP Verification ──────────────────────────────────────────────────────────
@@ -253,15 +297,14 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
   const { login } = useAuth();
   const { showToast } = useToast();
 
-  const [code,        setCode]        = useState('');
-  const [loading,     setLoading]     = useState(false);
-  const [resending,   setResending]   = useState(false);
-  const [error,       setError]       = useState('');
-  const [countdown,   setCountdown]   = useState(30);
+  const [code,      setCode]      = useState('');
+  const [loading,   setLoading]   = useState(false);
+  const [resending, setResending] = useState(false);
+  const [error,     setError]     = useState('');
+  const [countdown, setCountdown] = useState(30);
   const inputRef = useRef<TextInput>(null);
 
-  // Countdown timer for resend
-  useState(() => {
+  useEffect(() => {
     const id = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) { clearInterval(id); return 0; }
@@ -269,7 +312,7 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
       });
     }, 1000);
     return () => clearInterval(id);
-  });
+  }, []);
 
   async function handleVerify(finalCode: string) {
     if (finalCode.length !== 6 || loading) return;
@@ -278,14 +321,18 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
     try {
       const session = await verifyOtp(phone, finalCode);
       if (session.userType !== 'seller') {
-        setError('This account is not a seller account. Please contact HarvestConnect support.');
+        setError('This account is not a seller account. Contact HarvestConnect support.');
         setLoading(false);
         return;
       }
       await login(session);
-      showToast('Welcome back! Logged in successfully.', 'success');
+      showToast('Welcome back!', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid OTP. Please try again.');
+      if (isNetworkError(err)) {
+        setError('Cannot reach AuthSvc (port 3001). Go back and use ⚡ Dev Login.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Invalid OTP. Try again.');
+      }
       setCode('');
       inputRef.current?.focus();
     } finally {
@@ -302,7 +349,9 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
       setCode('');
       showToast('New OTP sent!', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resend OTP.');
+      setError(isNetworkError(err)
+        ? 'Cannot reach AuthSvc. Go back and use ⚡ Dev Login.'
+        : (err instanceof Error ? err.message : 'Failed to resend.'));
     } finally {
       setResending(false);
     }
@@ -336,7 +385,7 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
               <Text style={o.phone}>+91 {displayPhone}</Text>
             </Text>
 
-            {/* Hidden input that captures digits */}
+            {/* Hidden input captures digits; boxes show them */}
             <TextInput
               ref={inputRef}
               value={code}
@@ -348,27 +397,15 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
               caretHidden
             />
 
-            {/* Visual 6-box display */}
             <Pressable style={o.boxRow} onPress={() => inputRef.current?.focus()}>
               {Array.from({ length: 6 }).map((_, i) => {
                 const filled = i < code.length;
                 const active = i === code.length && !loading;
                 return (
-                  <View
-                    key={i}
-                    style={[
-                      o.box,
-                      filled && o.boxFilled,
-                      active && o.boxActive,
-                      loading && o.boxLoading,
-                    ]}>
-                    {loading && i === 0 ? (
-                      <ActivityIndicator size="small" color="#2d7a47" />
-                    ) : (
-                      <Text style={[o.boxTxt, filled && o.boxTxtFilled]}>
-                        {code[i] ?? ''}
-                      </Text>
-                    )}
+                  <View key={i} style={[o.box, filled && o.boxFilled, active && o.boxActive, loading && o.boxLoading]}>
+                    {loading && i === 0
+                      ? <ActivityIndicator size="small" color="#2d7a47" />
+                      : <Text style={[o.boxTxt, filled && o.boxTxtFilled]}>{code[i] ?? ''}</Text>}
                   </View>
                 );
               })}
@@ -410,41 +447,32 @@ const o = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f9fafb' },
   safe:   { flex: 1, paddingHorizontal: 24 },
 
-  back: { paddingTop: 16, paddingBottom: 8 },
+  back:    { paddingTop: 16, paddingBottom: 8 },
   backTxt: { fontSize: 14, fontWeight: '600', color: '#2d7a47' },
 
-  body:    { flex: 1, justifyContent: 'center', paddingBottom: 60 },
-  iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#f0fdf4', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2, borderColor: '#bbf7d0' },
+  body:     { flex: 1, justifyContent: 'center', paddingBottom: 60 },
+  iconWrap: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 20, borderWidth: 2, borderColor: '#bbf7d0',
+  },
   title: { fontSize: 30, fontWeight: '800', color: '#111827', lineHeight: 38, marginBottom: 10 },
   sub:   { fontSize: 14, color: '#6b7280', lineHeight: 22, marginBottom: 32 },
   phone: { fontWeight: '700', color: '#111827' },
 
-  hiddenInput: {
-    position: 'absolute',
-    opacity: 0,
-    width: 1,
-    height: 1,
-  },
+  hiddenInput: { position: 'absolute', opacity: 0, width: 1, height: 1 },
 
-  boxRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-    justifyContent: 'center',
-  },
+  boxRow: { flexDirection: 'row', gap: 10, marginBottom: 16, justifyContent: 'center' },
   box: {
-    width: 48, height: 58,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 48, height: 58, borderRadius: 14,
+    borderWidth: 2, borderColor: '#e5e7eb',
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
   },
-  boxFilled:  { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  boxActive:  { borderColor: '#2d7a47', shadowColor: '#2d7a47', shadowOpacity: 0.25, shadowRadius: 6, elevation: 3 },
-  boxLoading: { borderColor: '#e5e7eb' },
-  boxTxt:     { fontSize: 22, fontWeight: '700', color: '#9ca3af' },
+  boxFilled:    { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
+  boxActive:    { borderColor: '#2d7a47', shadowColor: '#2d7a47', shadowOpacity: 0.25, shadowRadius: 6, elevation: 3 },
+  boxLoading:   { borderColor: '#e5e7eb' },
+  boxTxt:       { fontSize: 22, fontWeight: '700', color: '#9ca3af' },
   boxTxtFilled: { color: '#1a4a28' },
 
   errorBox: {
@@ -459,9 +487,9 @@ const o = StyleSheet.create({
   },
   devHintTxt: { fontSize: 12, color: '#92400e' },
 
-  resendRow: { alignItems: 'center', marginTop: 8 },
+  resendRow:       { alignItems: 'center', marginTop: 8 },
   resendCountdown: { fontSize: 13, color: '#9ca3af' },
-  resendBtn: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
+  resendBtn:       { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
 });
 
 // ── AuthFlow orchestrator ─────────────────────────────────────────────────────
@@ -481,10 +509,5 @@ export function AuthFlow() {
       />
     );
   }
-  return (
-    <OtpScreen
-      phone={phone}
-      onBack={() => setScreen('phone')}
-    />
-  );
+  return <OtpScreen phone={phone} onBack={() => setScreen('phone')} />;
 }
