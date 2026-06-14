@@ -85,7 +85,7 @@ function OnboardingScreen() {
         <View style={s.footer}>
           <Pressable style={s.ctaBtn} onPress={() => setCreateOpen(true)}>
             <Text style={s.ctaTxt}>Create My Store</Text>
-            <Text style={s.ctaArrow}>→</Text>
+            <View style={s.ctaArrow} />
           </Pressable>
           <Text style={s.footerNote}>Takes less than 2 minutes</Text>
         </View>
@@ -216,6 +216,12 @@ const s = StyleSheet.create({
     backgroundColor: '#2d7a47', borderRadius: 16, paddingVertical: 16,
   },
   ctaTxt:   { fontSize: 16, fontWeight: '800', color: '#fff' },
-  ctaArrow: { fontSize: 18, color: '#fff', fontWeight: '700' },
+  ctaArrow: {
+    width: 0, height: 0,
+    borderTopWidth: 5, borderBottomWidth: 5, borderLeftWidth: 8,
+    borderStyle: 'solid',
+    borderTopColor: 'transparent', borderBottomColor: 'transparent',
+    borderLeftColor: '#fff',
+  },
   footerNote: { fontSize: 12, color: '#9ca3af', textAlign: 'center' },
 });

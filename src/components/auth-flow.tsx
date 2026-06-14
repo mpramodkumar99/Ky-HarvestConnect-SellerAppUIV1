@@ -209,7 +209,7 @@ function SignupScreen({
         <SafeAreaView style={sg.safe} edges={['top', 'bottom']}>
 
           <Pressable style={sg.back} onPress={onBack}>
-            <Text style={sg.backTxt}>← Back</Text>
+            <View style={sg.backChevron} /><Text style={sg.backTxt}>Back</Text>
           </Pressable>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -323,7 +323,14 @@ const sg = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f9fafb' },
   safe:   { flex: 1, paddingHorizontal: 24 },
 
-  back:    { paddingTop: 16, paddingBottom: 4 },
+  back:        { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 16, paddingBottom: 4 },
+  backChevron: {
+    width: 0, height: 0,
+    borderTopWidth: 5, borderBottomWidth: 5, borderRightWidth: 8,
+    borderStyle: 'solid',
+    borderTopColor: 'transparent', borderBottomColor: 'transparent',
+    borderRightColor: '#2d7a47',
+  },
   backTxt: { fontSize: 14, fontWeight: '600', color: '#2d7a47' },
 
   header:   { paddingTop: 8, paddingBottom: 28 },
@@ -424,7 +431,7 @@ function LoginPhoneScreen({
         <SafeAreaView style={lp.safe} edges={['top', 'bottom']}>
 
           <Pressable style={lp.back} onPress={onBack}>
-            <Text style={lp.backTxt}>← Back</Text>
+            <View style={lp.backChevron} /><Text style={lp.backTxt}>Back</Text>
           </Pressable>
 
           <View style={lp.body}>
@@ -489,7 +496,14 @@ const lp = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f9fafb' },
   safe:   { flex: 1, paddingHorizontal: 24 },
 
-  back:    { paddingTop: 16, paddingBottom: 8 },
+  back:        { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 16, paddingBottom: 8 },
+  backChevron: {
+    width: 0, height: 0,
+    borderTopWidth: 5, borderBottomWidth: 5, borderRightWidth: 8,
+    borderStyle: 'solid',
+    borderTopColor: 'transparent', borderBottomColor: 'transparent',
+    borderRightColor: '#2d7a47',
+  },
   backTxt: { fontSize: 14, fontWeight: '600', color: '#2d7a47' },
 
   body:     { flex: 1, justifyContent: 'center', paddingBottom: 40 },
@@ -614,7 +628,7 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
         <SafeAreaView style={o.safe} edges={['top', 'bottom']}>
 
           <Pressable style={o.back} onPress={onBack}>
-            <Text style={o.backTxt}>← Back</Text>
+            <View style={o.backChevron} /><Text style={o.backTxt}>Back</Text>
           </Pressable>
 
           <View style={o.body}>
@@ -689,7 +703,14 @@ const o = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f9fafb' },
   safe:   { flex: 1, paddingHorizontal: 24 },
 
-  back:    { paddingTop: 16, paddingBottom: 8 },
+  back:        { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 16, paddingBottom: 8 },
+  backChevron: {
+    width: 0, height: 0,
+    borderTopWidth: 5, borderBottomWidth: 5, borderRightWidth: 8,
+    borderStyle: 'solid',
+    borderTopColor: 'transparent', borderBottomColor: 'transparent',
+    borderRightColor: '#2d7a47',
+  },
   backTxt: { fontSize: 14, fontWeight: '600', color: '#2d7a47' },
 
   body:     { flex: 1, justifyContent: 'center', paddingBottom: 60 },
