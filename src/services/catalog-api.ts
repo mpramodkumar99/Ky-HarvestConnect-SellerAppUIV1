@@ -51,10 +51,11 @@ export interface CatalogProduct {
   isVerified: boolean;    // admin-controlled, read-only from seller perspective
   isHandmade: boolean;
   shipsTo: ShipsTo;
-  images: string[];       // ordered list of image URLs, max 5
+  images: string[];       // ordered list of image URLs/URIs, max 5
   status: ProductStatus;
   rating: number;
   reviewCount: number;
+  lowStockThreshold?: number; // seller-set; falls back to LOW_STOCK_THRESHOLD if absent
   createdAt: string;
   updatedAt: string;
 }

@@ -9,6 +9,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { StoreSwitcher } from '@/components/store-switcher';
 import { useToast } from '@/components/toast-provider';
 import { ProductFormModal } from '@/components/product-form-modal';
+import { ProductDetailModal } from '@/components/product-detail-modal';
 import { useStore, ROLE_PERMISSIONS } from '@/context/store-context';
 import {
   CatalogProduct, ProductStatus,
@@ -19,33 +20,73 @@ import {
 type StockLevel = 'in_stock' | 'low_stock' | 'out_of_stock';
 
 function stockLevel(p: CatalogProduct): StockLevel {
+  const threshold = p.lowStockThreshold ?? LOW_STOCK_THRESHOLD;
   if (p.stockQuantity === 0) return 'out_of_stock';
-  if (p.stockQuantity <= LOW_STOCK_THRESHOLD) return 'low_stock';
+  if (p.stockQuantity <= threshold) return 'low_stock';
   return 'in_stock';
 }
 
 function StockBadge({ level, qty }: { level: StockLevel; qty: number }) {
-  if (level === 'out_of_stock') {
+  if (level === 'out_of_stock')
     return <View style={sb.base}><Text style={sb.outTxt}>Out of Stock</Text></View>;
-  }
-  if (level === 'low_stock') {
+  if (level === 'low_stock')
     return <View style={[sb.base, sb.low]}><Text style={sb.lowTxt}>Low · {qty}</Text></View>;
-  }
   return <View style={[sb.base, sb.in]}><Text style={sb.inTxt}>In Stock · {qty}</Text></View>;
 }
 
 function StatusBadge({ status }: { status: ProductStatus }) {
-  if (status === 'active') {
+  if (status === 'active')
     return <View style={[stb.base, stb.active]}><Text style={stb.activeTxt}>Active</Text></View>;
-  }
-  if (status === 'draft') {
+  if (status === 'draft')
     return <View style={[stb.base, stb.draft]}><Text style={stb.draftTxt}>Draft</Text></View>;
-  }
   return <View style={[stb.base, stb.archived]}><Text style={stb.archivedTxt}>Archived</Text></View>;
 }
 
 const filterTabs = ['All', 'Active', 'Draft', 'Archived', 'Low Stock'] as const;
 type FilterTab = (typeof filterTabs)[number];
+
+// ── Bulk Actions Bar ──────────────────────────────────────────────────────────
+
+interface BulkBarProps {
+  count: number;
+  total: number;
+  onActivate: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  onSelectAll: () => void;
+  onClear: () => void;
+}
+
+function BulkActionsBar({ count, total, onActivate, onArchive, onDelete, onSelectAll, onClear }: BulkBarProps) {
+  return (
+    <View style={bulk.bar}>
+      <View style={bulk.topRow}>
+        <Text style={bulk.count}>{count} selected</Text>
+        <View style={bulk.topBtns}>
+          <Pressable onPress={onSelectAll} style={bulk.topBtn}>
+            <Text style={bulk.topBtnTxt}>Select All ({total})</Text>
+          </Pressable>
+          <Pressable onPress={onClear} style={bulk.topBtn}>
+            <Text style={[bulk.topBtnTxt, { color: '#6b7280' }]}>✕ Clear</Text>
+          </Pressable>
+        </View>
+      </View>
+      <View style={bulk.actionRow}>
+        <Pressable style={[bulk.actionBtn, bulk.activateBtn]} onPress={onActivate}>
+          <Text style={bulk.activateTxt}>● Activate</Text>
+        </Pressable>
+        <Pressable style={[bulk.actionBtn, bulk.archiveBtn]} onPress={onArchive}>
+          <Text style={bulk.archiveTxt}>Archive</Text>
+        </Pressable>
+        <Pressable style={[bulk.actionBtn, bulk.deleteBtn]} onPress={onDelete}>
+          <Text style={bulk.deleteTxt}>🗑️ Delete</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function ProductsScreen() {
   const { activeStore } = useStore();
@@ -53,14 +94,18 @@ export default function ProductsScreen() {
   const { openAdd } = useLocalSearchParams<{ openAdd?: string }>();
   const { showToast, showConfirm } = useToast();
 
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen]   = useState(false);
+  const [formOpen, setFormOpen]           = useState(false);
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | undefined>();
-  const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('All');
-  const [products, setProducts] = useState<CatalogProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [detailProduct, setDetailProduct] = useState<CatalogProduct | null>(null);
+  const [search, setSearch]               = useState('');
+  const [activeFilter, setActiveFilter]   = useState<FilterTab>('All');
+  const [products, setProducts]           = useState<CatalogProduct[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [fetchError, setFetchError]       = useState<string | null>(null);
+  const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set());
+
+  const isSelecting = selectedIds.size > 0;
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -77,7 +122,8 @@ export default function ProductsScreen() {
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
-  // Toggles listing status: active ↔ draft
+  // ── Single-item actions ───────────────────────────────────────────────────
+
   async function toggleListingStatus(product: CatalogProduct) {
     const newStatus: ProductStatus = product.status === 'active' ? 'draft' : 'active';
     setProducts((prev) =>
@@ -111,10 +157,77 @@ export default function ProductsScreen() {
     });
   }
 
-  function openAddForm() { setEditingProduct(undefined); setFormOpen(true); }
-  function openEdit(product: CatalogProduct) { setEditingProduct(product); setFormOpen(true); }
+  // ── Bulk actions ──────────────────────────────────────────────────────────
 
-  // Auto-open Add form when navigated from Dashboard quick action
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(filtered.map((p) => p.id)));
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function bulkUpdateStatus(newStatus: ProductStatus) {
+    const ids = [...selectedIds];
+    const snapshots = products.filter((p) => ids.includes(p.id));
+    setProducts((prev) =>
+      prev.map((p) => ids.includes(p.id) ? { ...p, status: newStatus } : p)
+    );
+    clearSelection();
+    try {
+      await Promise.all(
+        ids.map((id) => updateProduct(id, { status: newStatus }, activeStore.id))
+      );
+      showToast(`${ids.length} product${ids.length > 1 ? 's' : ''} ${newStatus === 'active' ? 'activated' : 'archived'}.`, 'success');
+    } catch {
+      setProducts((prev) =>
+        prev.map((p) => {
+          const snap = snapshots.find((s) => s.id === p.id);
+          return snap ? { ...p, status: snap.status } : p;
+        })
+      );
+      showToast('Some updates failed. Please try again.', 'error');
+    }
+  }
+
+  function bulkDelete() {
+    const ids = [...selectedIds];
+    showConfirm({
+      title: `Delete ${ids.length} Product${ids.length > 1 ? 's' : ''}`,
+      message: `Permanently remove ${ids.length} product${ids.length > 1 ? 's' : ''} from your catalogue? This cannot be undone.`,
+      confirmLabel: 'Delete All',
+      destructive: true,
+      onConfirm: async () => {
+        setProducts((prev) => prev.filter((p) => !ids.includes(p.id)));
+        clearSelection();
+        const results = await Promise.allSettled(
+          ids.map((id) => deleteProduct(id, activeStore.id))
+        );
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          showToast(`${failed} deletion${failed > 1 ? 's' : ''} failed. Refreshing...`, 'error');
+          fetchProducts();
+        } else {
+          showToast(`${ids.length} product${ids.length > 1 ? 's' : ''} deleted.`, 'success');
+        }
+      },
+    });
+  }
+
+  // ── Modal helpers ─────────────────────────────────────────────────────────
+
+  function openAddForm()  { setEditingProduct(undefined); setFormOpen(true); }
+  function openEdit(product: CatalogProduct) { setEditingProduct(product); setFormOpen(true); }
+  function openDetail(product: CatalogProduct) { setDetailProduct(product); }
+
   useEffect(() => {
     if (openAdd === 'true' && perms.canEditProducts) openAddForm();
   }, [openAdd]);
@@ -128,6 +241,8 @@ export default function ProductsScreen() {
       return [saved, ...prev];
     });
   }
+
+  // ── Filtering ─────────────────────────────────────────────────────────────
 
   const filtered = products.filter((p) => {
     const matchSearch =
@@ -151,21 +266,33 @@ export default function ProductsScreen() {
   };
 
   function tabLabel(tab: FilterTab) {
-    if (tab === 'Active'   && counts.active   > 0) return `Active (${counts.active})`;
-    if (tab === 'Draft'    && counts.draft    > 0) return `Draft (${counts.draft})`;
-    if (tab === 'Archived' && counts.archived > 0) return `Archived (${counts.archived})`;
-    if (tab === 'Low Stock'&& counts.lowStock > 0) return `Low Stock (${counts.lowStock})`;
+    if (tab === 'Active'    && counts.active   > 0) return `Active (${counts.active})`;
+    if (tab === 'Draft'     && counts.draft    > 0) return `Draft (${counts.draft})`;
+    if (tab === 'Archived'  && counts.archived > 0) return `Archived (${counts.archived})`;
+    if (tab === 'Low Stock' && counts.lowStock > 0) return `Low Stock (${counts.lowStock})`;
     return tab;
   }
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={s.screen}>
       <StoreSwitcher visible={switcherOpen} onClose={() => setSwitcherOpen(false)} />
+
       <ProductFormModal
         visible={formOpen}
         onClose={() => setFormOpen(false)}
         onSaved={onSaved}
         editProduct={editingProduct}
+      />
+
+      <ProductDetailModal
+        visible={!!detailProduct}
+        product={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        onEdit={(p) => { setDetailProduct(null); openEdit(p); }}
+        onToggleStatus={(p) => { setDetailProduct(null); toggleListingStatus(p); }}
+        canEdit={perms.canEditProducts}
       />
 
       {/* Header */}
@@ -174,51 +301,75 @@ export default function ProductsScreen() {
           <View style={s.headerRow}>
             <Pressable onPress={() => setSwitcherOpen(true)}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={s.headerTitle}>My Products</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>⌄</Text>
+                <Text style={s.headerTitle}>
+                  {isSelecting ? `${selectedIds.size} selected` : 'My Products'}
+                </Text>
+                {!isSelecting && (
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>⌄</Text>
+                )}
               </View>
               <Text style={s.headerSub}>{activeStore.name} · {products.length} listings</Text>
             </Pressable>
-            {perms.canEditProducts && (
-              <Pressable style={s.addBtn} onPress={openAddForm}>
-                <Text style={s.addBtnText}>＋ Add</Text>
-              </Pressable>
-            )}
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {isSelecting ? (
+                <Pressable style={s.cancelSelBtn} onPress={clearSelection}>
+                  <Text style={s.cancelSelTxt}>✕ Cancel</Text>
+                </Pressable>
+              ) : (
+                perms.canEditProducts && (
+                  <Pressable style={s.addBtn} onPress={openAddForm}>
+                    <Text style={s.addBtnText}>＋ Add</Text>
+                  </Pressable>
+                )
+              )}
+            </View>
           </View>
 
-          <View style={s.searchRow}>
-            <Text style={s.searchIcon}>🔍</Text>
-            <TextInput
-              style={s.searchInput}
-              placeholder="Search products..."
-              placeholderTextColor="#9ca3af"
-              value={search}
-              onChangeText={setSearch}
-            />
-            {search.length > 0 && (
-              <Pressable onPress={() => setSearch('')}>
-                <Text style={{ color: '#9ca3af', fontSize: 16 }}>✕</Text>
-              </Pressable>
-            )}
-          </View>
+          {!isSelecting && (
+            <View style={s.searchRow}>
+              <Text style={s.searchIcon}>🔍</Text>
+              <TextInput
+                style={s.searchInput}
+                placeholder="Search products..."
+                placeholderTextColor="#9ca3af"
+                value={search}
+                onChangeText={setSearch}
+              />
+              {search.length > 0 && (
+                <Pressable onPress={() => setSearch('')}>
+                  <Text style={{ color: '#9ca3af', fontSize: 16 }}>✕</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </SafeAreaView>
       </View>
 
       {/* Filter Tabs */}
-      <View style={s.filterWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>
-          {filterTabs.map((tab) => (
-            <Pressable
-              key={tab}
-              style={[s.filterTab, activeFilter === tab && s.filterTabActive]}
-              onPress={() => setActiveFilter(tab)}>
-              <Text style={[s.filterTabTxt, activeFilter === tab && s.filterTabTxtActive]}>
-                {tabLabel(tab)}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
+      {!isSelecting && (
+        <View style={s.filterWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>
+            {filterTabs.map((tab) => (
+              <Pressable
+                key={tab}
+                style={[s.filterTab, activeFilter === tab && s.filterTabActive]}
+                onPress={() => setActiveFilter(tab)}>
+                <Text style={[s.filterTabTxt, activeFilter === tab && s.filterTabTxtActive]}>
+                  {tabLabel(tab)}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Selection hint */}
+      {isSelecting && (
+        <View style={s.selHint}>
+          <Text style={s.selHintTxt}>Tap cards to toggle · Long press to start selection</Text>
+        </View>
+      )}
 
       {/* Product List */}
       {loading ? (
@@ -236,7 +387,9 @@ export default function ProductsScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[s.listContent, isSelecting && { paddingBottom: 120 }]}>
           {filtered.length === 0 ? (
             <View style={s.emptyState}>
               <Text style={{ fontSize: 40 }}>🌾</Text>
@@ -253,10 +406,37 @@ export default function ProductsScreen() {
             filtered.map((product) => {
               const level = stockLevel(product);
               const isInactive = product.status !== 'active' || level === 'out_of_stock';
+              const isSelected = selectedIds.has(product.id);
+
               return (
-                <View
+                <Pressable
                   key={product.id}
-                  style={[s.productCard, isInactive && s.productCardInactive]}>
+                  style={[
+                    s.productCard,
+                    isInactive && !isSelected && s.productCardInactive,
+                    isSelected && s.productCardSelected,
+                  ]}
+                  onPress={() => {
+                    if (isSelecting) { toggleSelect(product.id); }
+                    else { openDetail(product); }
+                  }}
+                  onLongPress={() => {
+                    if (!isSelecting) toggleSelect(product.id);
+                  }}
+                  delayLongPress={300}>
+
+                  {/* Selection overlay */}
+                  {isSelecting && (
+                    <View style={s.selCircle}>
+                      {isSelected ? (
+                        <View style={s.selCircleChecked}>
+                          <Text style={s.selCheckTxt}>✓</Text>
+                        </View>
+                      ) : (
+                        <View style={s.selCircleEmpty} />
+                      )}
+                    </View>
+                  )}
 
                   {/* Left: emoji */}
                   <View style={s.productEmoji}>
@@ -273,7 +453,6 @@ export default function ProductsScreen() {
                   <View style={s.productMid}>
                     <Text style={s.productName} numberOfLines={1}>{product.name}</Text>
 
-                    {/* Badges row */}
                     <View style={s.badgeRow}>
                       <StatusBadge status={product.status} />
                       <StockBadge level={level} qty={product.stockQuantity} />
@@ -300,10 +479,9 @@ export default function ProductsScreen() {
                     <Text style={s.productShips}>🚚 Ships to {product.shipsTo}</Text>
                   </View>
 
-                  {/* Right: toggle + actions */}
-                  {perms.canEditProducts && (
+                  {/* Right: toggle + actions (hidden in selection mode) */}
+                  {perms.canEditProducts && !isSelecting && (
                     <View style={s.productRight}>
-                      {/* Active/Draft status toggle */}
                       <Pressable
                         style={[
                           s.statusToggleBtn,
@@ -326,12 +504,12 @@ export default function ProductsScreen() {
                       </View>
                     </View>
                   )}
-                </View>
+                </Pressable>
               );
             })
           )}
 
-          {perms.canEditProducts && (
+          {perms.canEditProducts && !isSelecting && (
             <Pressable style={s.addProductCta} onPress={openAddForm}>
               <Text style={{ fontSize: 28 }}>＋</Text>
               <Text style={s.addProductCtaTitle}>Add a New Product</Text>
@@ -343,11 +521,23 @@ export default function ProductsScreen() {
         </ScrollView>
       )}
 
+      {/* Bulk Actions Bar — floats over the list when in selection mode */}
+      {isSelecting && perms.canEditProducts && (
+        <BulkActionsBar
+          count={selectedIds.size}
+          total={filtered.length}
+          onActivate={() => bulkUpdateStatus('active')}
+          onArchive={() => bulkUpdateStatus('archived')}
+          onDelete={bulkDelete}
+          onSelectAll={selectAll}
+          onClear={clearSelection}
+        />
+      )}
     </View>
   );
 }
 
-// ── Stock badge styles ───────────────────────────────────────────────────────
+// ── Stock badge styles ─────────────────────────────────────────────────────────
 const sb = StyleSheet.create({
   base: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: '#fee2e2' },
   in:   { backgroundColor: '#d1fae5' },
@@ -357,7 +547,7 @@ const sb = StyleSheet.create({
   lowTxt: { fontSize: 9, fontWeight: '700', color: '#92400e' },
 });
 
-// ── Status badge styles ──────────────────────────────────────────────────────
+// ── Status badge styles ────────────────────────────────────────────────────────
 const stb = StyleSheet.create({
   base:     { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
   active:   { backgroundColor: '#dcfce7' },
@@ -368,7 +558,47 @@ const stb = StyleSheet.create({
   archivedTxt: { fontSize: 9, fontWeight: '700', color: '#6b7280' },
 });
 
-// ── Screen styles ────────────────────────────────────────────────────────────
+// ── Bulk bar styles ────────────────────────────────────────────────────────────
+const bulk = StyleSheet.create({
+  bar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  count: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  topBtns: { flexDirection: 'row', gap: 12 },
+  topBtn: { paddingVertical: 4 },
+  topBtnTxt: { fontSize: 13, fontWeight: '600', color: '#2d7a47' },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  activateBtn: { backgroundColor: '#2d7a47' },
+  archiveBtn:  { backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
+  deleteBtn:   { backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' },
+  activateTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  archiveTxt:  { fontSize: 13, fontWeight: '700', color: '#374151' },
+  deleteTxt:   { fontSize: 13, fontWeight: '700', color: '#dc2626' },
+});
+
+// ── Screen styles ──────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f9fafb' },
 
@@ -390,6 +620,15 @@ const s = StyleSheet.create({
   headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
   addBtn: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { fontSize: 13, fontWeight: '700', color: '#2d7a47' },
+  cancelSelBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  cancelSelTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -407,6 +646,15 @@ const s = StyleSheet.create({
   filterTabActive: { backgroundColor: '#2d7a47' },
   filterTabTxt: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
   filterTabTxtActive: { color: '#fff' },
+
+  selHint: {
+    backgroundColor: '#fef3c7',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fde68a',
+  },
+  selHintTxt: { fontSize: 11, color: '#92400e', textAlign: 'center', fontWeight: '500' },
 
   centeredState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 80 },
   stateText: { fontSize: 14, color: '#6b7280' },
@@ -437,6 +685,32 @@ const s = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
   productCardInactive: { opacity: 0.6 },
+  productCardSelected: { borderColor: '#2d7a47', borderWidth: 2, backgroundColor: '#f0fdf4' },
+
+  selCircle: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 10,
+  },
+  selCircleEmpty: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    backgroundColor: '#fff',
+  },
+  selCircleChecked: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#2d7a47',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selCheckTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
   productEmoji: {
     width: 54,
     height: 54,
