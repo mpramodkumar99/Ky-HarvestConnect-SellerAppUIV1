@@ -138,7 +138,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   };
 
   if (!body.success) {
-    const msg = body.error?.title ?? 'User service error';
+    // body.error?.title is our format; fallback to Fastify's native 'message' field
+    const msg = body.error?.title ?? (body as Record<string, unknown>)['message'] ?? 'User service error';
     throw new Error(String(msg));
   }
 

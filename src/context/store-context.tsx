@@ -188,13 +188,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const acceptInvite = useCallback(async (sellerId: string, memberId: string) => {
     if (!userId) return;
+    // This is the critical call — throws on failure so the UI can surface the error
     await activateMember(sellerId, memberId, userId);
+    // Invite accepted — remove from pending list regardless of what comes next
     setPendingInvites(prev => prev.filter(i => i.id !== memberId));
-    // Re-fetch stores so the newly accepted store appears
-    const sellers = await getSellersByUser(userId);
-    const stores  = sellers.map(s => sellerToStore(s, s.memberRole));
-    setStoreList(stores);
-    if (stores.length > 0) setActiveStoreId(prev => prev || stores[0].id);
+    // Re-fetch stores; errors here are non-fatal (userId effect will retry on re-render)
+    try {
+      const sellers = await getSellersByUser(userId);
+      const stores  = sellers.map(s => sellerToStore(s, s.memberRole));
+      setStoreList(stores);
+      if (stores.length > 0) setActiveStoreId(prev => prev || stores[0].id);
+    } catch { /* re-fetch failed silently; store list will update on next effect run */ }
   }, [userId]);
 
   const declineInvite = useCallback(async (sellerId: string, memberId: string) => {
