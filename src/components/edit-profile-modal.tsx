@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  View, Text, TextInput, Pressable, StyleSheet,
+  Modal, View, Text, TextInput, Pressable, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,12 +17,12 @@ interface Props {
 export function EditProfileModal({ visible, onClose, onUpdated }: Props) {
   const { session } = useAuth();
 
-  const [name,        setName]        = useState('');
-  const [email,       setEmail]       = useState('');
-  const [phone,       setPhone]       = useState('');
-  const [loading,     setLoading]     = useState(false);
-  const [fetching,    setFetching]    = useState(false);
-  const [error,       setError]       = useState('');
+  const [name,     setName]     = useState('');
+  const [email,    setEmail]    = useState('');
+  const [phone,    setPhone]    = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [error,    setError]    = useState('');
 
   useEffect(() => {
     if (!visible || !session?.userId) return;
@@ -55,133 +55,138 @@ export function EditProfileModal({ visible, onClose, onUpdated }: Props) {
     }
   }
 
-  if (!visible) return null;
+  const initials = name.trim().split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase() || '??';
 
   return (
-    <View style={s.overlay}>
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={s.container}>
-          <SafeAreaView style={s.flex} edges={['bottom']}>
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={s.root}>
 
-            {/* Handle */}
-            <View style={s.handle} />
+          {/* Backdrop — absoluteFill so it doesn't consume flex height */}
+          <Pressable style={[StyleSheet.absoluteFill, s.backdrop]} onPress={onClose} />
 
-            {/* Header */}
-            <View style={s.header}>
-              <Text style={s.title}>Personal Info</Text>
-              <Pressable style={s.closeBtn} onPress={onClose}>
-                <Text style={s.closeTxt}>✕</Text>
-              </Pressable>
-            </View>
+          {/* Sheet */}
+          <View style={s.sheet}>
+            <SafeAreaView edges={['bottom']}>
 
-            {fetching ? (
-              <View style={s.center}>
-                <ActivityIndicator color="#2d7a47" />
-                <Text style={s.loadingTxt}>Loading profile…</Text>
+              {/* Handle */}
+              <View style={s.handle} />
+
+              {/* Header */}
+              <View style={s.header}>
+                <Text style={s.title}>Personal Info</Text>
+                <Pressable style={s.closeBtn} onPress={onClose}>
+                  <Text style={s.closeTxt}>✕</Text>
+                </Pressable>
               </View>
-            ) : (
-              <ScrollView
-                style={s.flex}
-                contentContainerStyle={s.body}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}>
 
-                {/* Avatar initials */}
-                <View style={s.avatarWrap}>
-                  <View style={s.avatar}>
-                    <Text style={s.avatarTxt}>
-                      {name.trim().split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase() || '??'}
-                    </Text>
-                  </View>
+              {fetching ? (
+                <View style={s.center}>
+                  <ActivityIndicator color="#2d7a47" />
+                  <Text style={s.loadingTxt}>Loading profile…</Text>
                 </View>
+              ) : (
+                <ScrollView
+                  contentContainerStyle={s.body}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}>
 
-                {/* Phone — read only */}
-                <View style={s.field}>
-                  <Text style={s.label}>Phone Number</Text>
-                  <View style={s.readOnlyWrap}>
-                    <Text style={s.readOnlyFlag}>🇮🇳</Text>
-                    <Text style={s.readOnlyTxt}>{phone}</Text>
-                    <View style={s.lockedPill}>
-                      <Text style={s.lockedTxt}>Cannot change</Text>
+                  {/* Avatar initials */}
+                  <View style={s.avatarWrap}>
+                    <View style={s.avatar}>
+                      <Text style={s.avatarTxt}>{initials}</Text>
                     </View>
                   </View>
-                </View>
 
-                {/* Name */}
-                <View style={s.field}>
-                  <Text style={s.label}>Full Name *</Text>
-                  <TextInput
-                    style={s.input}
-                    value={name}
-                    onChangeText={(t) => { setName(t); setError(''); }}
-                    placeholder="Your full name"
-                    placeholderTextColor="#9ca3af"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                    editable={!loading}
-                  />
-                </View>
-
-                {/* Email */}
-                <View style={s.field}>
-                  <Text style={s.label}>Email <Text style={s.optional}>(optional)</Text></Text>
-                  <TextInput
-                    style={s.input}
-                    value={email}
-                    onChangeText={(t) => { setEmail(t); setError(''); }}
-                    placeholder="you@example.com"
-                    placeholderTextColor="#9ca3af"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    returnKeyType="done"
-                    onSubmitEditing={handleSave}
-                    editable={!loading}
-                  />
-                </View>
-
-                {error ? (
-                  <View style={s.errorBox}>
-                    <Text style={s.errorTxt}>{error}</Text>
+                  {/* Phone — read only */}
+                  <View style={s.field}>
+                    <Text style={s.label}>Phone Number</Text>
+                    <View style={s.readOnlyWrap}>
+                      <Text style={s.readOnlyFlag}>🇮🇳</Text>
+                      <Text style={s.readOnlyTxt}>{phone}</Text>
+                      <View style={s.lockedPill}>
+                        <Text style={s.lockedTxt}>Cannot change</Text>
+                      </View>
+                    </View>
                   </View>
-                ) : null}
 
-              </ScrollView>
-            )}
+                  {/* Name */}
+                  <View style={s.field}>
+                    <Text style={s.label}>Full Name *</Text>
+                    <TextInput
+                      style={s.input}
+                      value={name}
+                      onChangeText={(t) => { setName(t); setError(''); }}
+                      placeholder="Your full name"
+                      placeholderTextColor="#9ca3af"
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                      editable={!loading}
+                    />
+                  </View>
 
-            {/* Footer */}
-            {!fetching && (
-              <View style={s.footer}>
-                <Pressable style={s.cancelBtn} onPress={onClose} disabled={loading}>
-                  <Text style={s.cancelTxt}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  style={[s.saveBtn, (!name.trim() || loading) && s.saveBtnDisabled]}
-                  onPress={handleSave}
-                  disabled={!name.trim() || loading}>
-                  {loading
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={s.saveTxt}>Save Changes</Text>}
-                </Pressable>
-              </View>
-            )}
+                  {/* Email */}
+                  <View style={s.field}>
+                    <Text style={s.label}>Email <Text style={s.optional}>(optional)</Text></Text>
+                    <TextInput
+                      style={s.input}
+                      value={email}
+                      onChangeText={(t) => { setEmail(t); setError(''); }}
+                      placeholder="you@example.com"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSave}
+                      editable={!loading}
+                    />
+                  </View>
 
-          </SafeAreaView>
+                  {error ? (
+                    <View style={s.errorBox}>
+                      <Text style={s.errorTxt}>{error}</Text>
+                    </View>
+                  ) : null}
+
+                </ScrollView>
+              )}
+
+              {/* Footer */}
+              {!fetching && (
+                <View style={s.footer}>
+                  <Pressable style={s.cancelBtn} onPress={onClose} disabled={loading}>
+                    <Text style={s.cancelTxt}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[s.saveBtn, (!name.trim() || loading) && s.saveBtnDisabled]}
+                    onPress={handleSave}
+                    disabled={!name.trim() || loading}>
+                    {loading
+                      ? <ActivityIndicator color="#fff" />
+                      : <Text style={s.saveTxt}>Save Changes</Text>}
+                  </Pressable>
+                </View>
+              )}
+
+            </SafeAreaView>
+          </View>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </Modal>
   );
 }
 
 const s = StyleSheet.create({
-  overlay:   { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end', zIndex: 100 },
-  flex:      { flex: 1 },
-  container: {
+  flex: { flex: 1 },
+
+  root:    { flex: 1, justifyContent: 'flex-end' },
+  backdrop:{ backgroundColor: 'rgba(0,0,0,0.45)' },
+
+  sheet: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    maxHeight: '90%',
     paddingTop: 10,
+    maxHeight: '90%',
   },
 
   handle: {
@@ -201,7 +206,7 @@ const s = StyleSheet.create({
   center:     { padding: 40, alignItems: 'center', gap: 10 },
   loadingTxt: { fontSize: 13, color: '#6b7280' },
 
-  body: { padding: 20, gap: 4 },
+  body: { padding: 20 },
 
   avatarWrap: { alignItems: 'center', paddingVertical: 16 },
   avatar: {
@@ -244,7 +249,7 @@ const s = StyleSheet.create({
 
   footer: {
     flexDirection: 'row', gap: 10,
-    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8,
     borderTopWidth: 1, borderTopColor: '#f3f4f6',
   },
   cancelBtn: {
