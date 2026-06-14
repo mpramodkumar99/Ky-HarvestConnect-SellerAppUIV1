@@ -15,6 +15,7 @@ import { ReviewsModal } from '@/components/reviews-modal';
 import { HelpSupportModal } from '@/components/help-support-modal';
 import { AppSettingsModal } from '@/components/app-settings-modal';
 import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG, DELIVERY_ZONE_CONFIG } from '@/context/store-context';
+import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/components/toast-provider';
 import { getBankAccount, setBankAccount as saveBankAccount, type BankAccount, type CreateBankAccountInput } from '@/services/user-api';
 import { listProducts } from '@/services/catalog-api';
@@ -48,6 +49,7 @@ const menuItems: MenuItem[] = [
 
 export default function ProfileScreen() {
   const { stores, activeStore, teamMembers, loadingTeam, setActiveStore, refreshTeam, refreshSeller } = useStore();
+  const { logout } = useAuth();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const router = useRouter();
   const { showToast } = useToast();
@@ -116,7 +118,9 @@ export default function ProfileScreen() {
         {
           text: 'Log Out',
           style: 'destructive',
-          onPress: () => showToast('Logout will be available once auth is integrated.', 'info'),
+          onPress: async () => {
+            await logout();
+          },
         },
       ],
     );

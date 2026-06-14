@@ -1,0 +1,490 @@
+import { useRef, useState } from 'react';
+import {
+  View, Text, Pressable, TextInput, StyleSheet,
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { normalizePhone, requestOtp, verifyOtp } from '@/services/auth-api';
+import { useAuth } from '@/context/auth-context';
+import { useToast } from '@/components/toast-provider';
+
+type Screen = 'welcome' | 'phone' | 'otp';
+
+// ── Welcome ───────────────────────────────────────────────────────────────────
+
+function WelcomeScreen({ onNext }: { onNext: () => void }) {
+  return (
+    <View style={w.screen}>
+      <SafeAreaView style={w.safe} edges={['top', 'bottom']}>
+
+        <View style={w.top}>
+          <View style={w.logoRing}>
+            <Text style={w.logoIcon}>🌾</Text>
+          </View>
+          <Text style={w.brand}>HarvestConnect</Text>
+          <View style={w.sellerPill}>
+            <Text style={w.sellerPillTxt}>Seller</Text>
+          </View>
+        </View>
+
+        <View style={w.hero}>
+          <Text style={w.title}>Sell fresh.{'\n'}Earn directly.</Text>
+          <Text style={w.sub}>
+            Join thousands of farmers, artisans, and home cooks selling on HarvestConnect — no middlemen, no hidden fees.
+          </Text>
+        </View>
+
+        <View style={w.features}>
+          {[
+            { icon: '📦', text: 'Orders straight from buyers in your area' },
+            { icon: '💰', text: 'T+1 payouts to your bank account' },
+            { icon: '📊', text: 'Sales analytics and growth insights' },
+          ].map((f) => (
+            <View key={f.text} style={w.featureRow}>
+              <Text style={w.featureIcon}>{f.icon}</Text>
+              <Text style={w.featureTxt}>{f.text}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={w.footer}>
+          <Pressable style={w.ctaBtn} onPress={onNext}>
+            <Text style={w.ctaTxt}>Get Started</Text>
+            <Text style={w.ctaArrow}>→</Text>
+          </Pressable>
+          <Text style={w.note}>Already a seller? Log in with your registered phone.</Text>
+        </View>
+
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const w = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#1a4a28' },
+  safe:   { flex: 1, paddingHorizontal: 28 },
+
+  top: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 24,
+    paddingBottom: 36,
+  },
+  logoRing: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
+  },
+  logoIcon: { fontSize: 22 },
+  brand: { fontSize: 18, fontWeight: '800', color: '#fff', flex: 1 },
+  sellerPill: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3,
+  },
+  sellerPillTxt: { fontSize: 11, fontWeight: '700', color: '#fff' },
+
+  hero: { marginBottom: 40 },
+  title: { fontSize: 38, fontWeight: '900', color: '#fff', lineHeight: 46, marginBottom: 14 },
+  sub:   { fontSize: 15, color: 'rgba(255,255,255,0.72)', lineHeight: 22 },
+
+  features: { gap: 14, marginBottom: 'auto' as unknown as number },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  featureIcon: { fontSize: 22, width: 32, textAlign: 'center' },
+  featureTxt:  { fontSize: 14, color: 'rgba(255,255,255,0.85)', flex: 1, lineHeight: 20 },
+
+  footer: { paddingTop: 32, paddingBottom: 12, gap: 12 },
+  ctaBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: '#fff', borderRadius: 16, paddingVertical: 17,
+  },
+  ctaTxt:   { fontSize: 16, fontWeight: '800', color: '#1a4a28' },
+  ctaArrow: { fontSize: 18, fontWeight: '700', color: '#1a4a28' },
+  note: { fontSize: 12, color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
+});
+
+// ── Phone Entry ───────────────────────────────────────────────────────────────
+
+function PhoneScreen({ onNext, onBack }: { onNext: (phone: string) => void; onBack: () => void }) {
+  const [phone,   setPhone]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+  const { showToast } = useToast();
+
+  const digits = phone.replace(/\D/g, '');
+  const canSubmit = digits.length === 10 && !loading;
+
+  async function handleSend() {
+    if (!canSubmit) return;
+    setLoading(true);
+    setError('');
+    try {
+      const normalized = normalizePhone(phone);
+      await requestOtp(normalized);
+      onNext(normalized);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to send OTP.';
+      setError(msg);
+      // Dev hint — OTP always succeeds if phone exists in UserSvc seed
+      if (msg.toLowerCase().includes('no account')) {
+        showToast('Phone not found. Using dev OTP: try 9000000112', 'info');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView style={p.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View style={p.screen}>
+        <SafeAreaView style={p.safe} edges={['top', 'bottom']}>
+
+          <Pressable style={p.back} onPress={onBack}>
+            <Text style={p.backTxt}>← Back</Text>
+          </Pressable>
+
+          <View style={p.body}>
+            <View style={p.iconWrap}>
+              <Text style={{ fontSize: 36 }}>📱</Text>
+            </View>
+            <Text style={p.title}>Enter your{'\n'}phone number</Text>
+            <Text style={p.sub}>We'll send a 6-digit OTP to verify your number.</Text>
+
+            <View style={p.inputWrap}>
+              <View style={p.prefix}>
+                <Text style={p.flag}>🇮🇳</Text>
+                <Text style={p.prefixTxt}>+91</Text>
+              </View>
+              <TextInput
+                style={p.input}
+                value={phone}
+                onChangeText={(t) => { setPhone(t); setError(''); }}
+                placeholder="00000 00000"
+                placeholderTextColor="#9ca3af"
+                keyboardType="phone-pad"
+                maxLength={10}
+                autoFocus
+                returnKeyType="send"
+                onSubmitEditing={handleSend}
+              />
+            </View>
+
+            {error ? (
+              <View style={p.errorBox}>
+                <Text style={p.errorTxt}>{error}</Text>
+              </View>
+            ) : null}
+
+            <Text style={p.hint}>
+              {__DEV__ ? 'Dev: use any 10-digit number ending in a valid UserSvc seller phone (e.g. 9000000112). OTP will be 123456.' : 'Standard call/SMS rates may apply.'}
+            </Text>
+          </View>
+
+          <View style={p.footer}>
+            <Pressable
+              style={[p.sendBtn, !canSubmit && p.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={!canSubmit}>
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={p.sendTxt}>Send OTP →</Text>}
+            </Pressable>
+          </View>
+
+        </SafeAreaView>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const p = StyleSheet.create({
+  flex:   { flex: 1 },
+  screen: { flex: 1, backgroundColor: '#f9fafb' },
+  safe:   { flex: 1, paddingHorizontal: 24 },
+
+  back: { paddingTop: 16, paddingBottom: 8 },
+  backTxt: { fontSize: 14, fontWeight: '600', color: '#2d7a47' },
+
+  body:    { flex: 1, justifyContent: 'center', paddingBottom: 40 },
+  iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#f0fdf4', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2, borderColor: '#bbf7d0' },
+  title: { fontSize: 30, fontWeight: '800', color: '#111827', lineHeight: 38, marginBottom: 10 },
+  sub:   { fontSize: 14, color: '#6b7280', lineHeight: 21, marginBottom: 28 },
+
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 2, borderColor: '#2d7a47', borderRadius: 16,
+    backgroundColor: '#fff', overflow: 'hidden', marginBottom: 12,
+  },
+  prefix: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 16,
+    borderRightWidth: 1, borderRightColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  flag: { fontSize: 18 },
+  prefixTxt: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  input: {
+    flex: 1, paddingHorizontal: 16, paddingVertical: 16,
+    fontSize: 20, fontWeight: '600', color: '#111827', letterSpacing: 2,
+  },
+
+  errorBox: {
+    backgroundColor: '#fff5f5', borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: '#fca5a5', marginBottom: 12,
+  },
+  errorTxt: { fontSize: 12, color: '#dc2626', lineHeight: 17 },
+
+  hint: { fontSize: 11, color: '#9ca3af', lineHeight: 16 },
+
+  footer: { paddingBottom: 12 },
+  sendBtn: {
+    backgroundColor: '#2d7a47', borderRadius: 16,
+    paddingVertical: 17, alignItems: 'center',
+  },
+  sendBtnDisabled: { opacity: 0.45 },
+  sendTxt: { fontSize: 16, fontWeight: '800', color: '#fff' },
+});
+
+// ── OTP Verification ──────────────────────────────────────────────────────────
+
+function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
+  const { login } = useAuth();
+  const { showToast } = useToast();
+
+  const [code,        setCode]        = useState('');
+  const [loading,     setLoading]     = useState(false);
+  const [resending,   setResending]   = useState(false);
+  const [error,       setError]       = useState('');
+  const [countdown,   setCountdown]   = useState(30);
+  const inputRef = useRef<TextInput>(null);
+
+  // Countdown timer for resend
+  useState(() => {
+    const id = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) { clearInterval(id); return 0; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  });
+
+  async function handleVerify(finalCode: string) {
+    if (finalCode.length !== 6 || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const session = await verifyOtp(phone, finalCode);
+      if (session.userType !== 'seller') {
+        setError('This account is not a seller account. Please contact HarvestConnect support.');
+        setLoading(false);
+        return;
+      }
+      await login(session);
+      showToast('Welcome back! Logged in successfully.', 'success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid OTP. Please try again.');
+      setCode('');
+      inputRef.current?.focus();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setResending(true);
+    setError('');
+    try {
+      await requestOtp(phone);
+      setCountdown(30);
+      setCode('');
+      showToast('New OTP sent!', 'success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resend OTP.');
+    } finally {
+      setResending(false);
+    }
+  }
+
+  function handleCodeChange(text: string) {
+    const digits = text.replace(/\D/g, '').slice(0, 6);
+    setCode(digits);
+    setError('');
+    if (digits.length === 6) handleVerify(digits);
+  }
+
+  const displayPhone = phone.replace('+91', '');
+
+  return (
+    <KeyboardAvoidingView style={o.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <View style={o.screen}>
+        <SafeAreaView style={o.safe} edges={['top', 'bottom']}>
+
+          <Pressable style={o.back} onPress={onBack}>
+            <Text style={o.backTxt}>← Back</Text>
+          </Pressable>
+
+          <View style={o.body}>
+            <View style={o.iconWrap}>
+              <Text style={{ fontSize: 36 }}>🔐</Text>
+            </View>
+            <Text style={o.title}>Verify your{'\n'}number</Text>
+            <Text style={o.sub}>
+              Enter the 6-digit OTP sent to{'\n'}
+              <Text style={o.phone}>+91 {displayPhone}</Text>
+            </Text>
+
+            {/* Hidden input that captures digits */}
+            <TextInput
+              ref={inputRef}
+              value={code}
+              onChangeText={handleCodeChange}
+              keyboardType="number-pad"
+              maxLength={6}
+              autoFocus
+              style={o.hiddenInput}
+              caretHidden
+            />
+
+            {/* Visual 6-box display */}
+            <Pressable style={o.boxRow} onPress={() => inputRef.current?.focus()}>
+              {Array.from({ length: 6 }).map((_, i) => {
+                const filled = i < code.length;
+                const active = i === code.length && !loading;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      o.box,
+                      filled && o.boxFilled,
+                      active && o.boxActive,
+                      loading && o.boxLoading,
+                    ]}>
+                    {loading && i === 0 ? (
+                      <ActivityIndicator size="small" color="#2d7a47" />
+                    ) : (
+                      <Text style={[o.boxTxt, filled && o.boxTxtFilled]}>
+                        {code[i] ?? ''}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </Pressable>
+
+            {error ? (
+              <View style={o.errorBox}>
+                <Text style={o.errorTxt}>{error}</Text>
+              </View>
+            ) : null}
+
+            {__DEV__ && (
+              <View style={o.devHint}>
+                <Text style={o.devHintTxt}>Dev: OTP is always <Text style={{ fontWeight: '800' }}>123456</Text></Text>
+              </View>
+            )}
+
+            <View style={o.resendRow}>
+              {countdown > 0 ? (
+                <Text style={o.resendCountdown}>Resend OTP in {countdown}s</Text>
+              ) : (
+                <Pressable onPress={handleResend} disabled={resending}>
+                  <Text style={[o.resendBtn, resending && { opacity: 0.5 }]}>
+                    {resending ? 'Sending…' : 'Resend OTP'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+        </SafeAreaView>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const o = StyleSheet.create({
+  flex:   { flex: 1 },
+  screen: { flex: 1, backgroundColor: '#f9fafb' },
+  safe:   { flex: 1, paddingHorizontal: 24 },
+
+  back: { paddingTop: 16, paddingBottom: 8 },
+  backTxt: { fontSize: 14, fontWeight: '600', color: '#2d7a47' },
+
+  body:    { flex: 1, justifyContent: 'center', paddingBottom: 60 },
+  iconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#f0fdf4', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 2, borderColor: '#bbf7d0' },
+  title: { fontSize: 30, fontWeight: '800', color: '#111827', lineHeight: 38, marginBottom: 10 },
+  sub:   { fontSize: 14, color: '#6b7280', lineHeight: 22, marginBottom: 32 },
+  phone: { fontWeight: '700', color: '#111827' },
+
+  hiddenInput: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+  },
+
+  boxRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+    justifyContent: 'center',
+  },
+  box: {
+    width: 48, height: 58,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxFilled:  { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
+  boxActive:  { borderColor: '#2d7a47', shadowColor: '#2d7a47', shadowOpacity: 0.25, shadowRadius: 6, elevation: 3 },
+  boxLoading: { borderColor: '#e5e7eb' },
+  boxTxt:     { fontSize: 22, fontWeight: '700', color: '#9ca3af' },
+  boxTxtFilled: { color: '#1a4a28' },
+
+  errorBox: {
+    backgroundColor: '#fff5f5', borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: '#fca5a5', marginBottom: 12,
+  },
+  errorTxt: { fontSize: 12, color: '#dc2626', lineHeight: 17 },
+
+  devHint: {
+    backgroundColor: '#fef3c7', borderRadius: 10, padding: 10,
+    borderWidth: 1, borderColor: '#fde68a', marginBottom: 12, alignItems: 'center',
+  },
+  devHintTxt: { fontSize: 12, color: '#92400e' },
+
+  resendRow: { alignItems: 'center', marginTop: 8 },
+  resendCountdown: { fontSize: 13, color: '#9ca3af' },
+  resendBtn: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
+});
+
+// ── AuthFlow orchestrator ─────────────────────────────────────────────────────
+
+export function AuthFlow() {
+  const [screen, setScreen] = useState<Screen>('welcome');
+  const [phone,  setPhone]  = useState('');
+
+  if (screen === 'welcome') {
+    return <WelcomeScreen onNext={() => setScreen('phone')} />;
+  }
+  if (screen === 'phone') {
+    return (
+      <PhoneScreen
+        onNext={(ph) => { setPhone(ph); setScreen('otp'); }}
+        onBack={() => setScreen('welcome')}
+      />
+    );
+  }
+  return (
+    <OtpScreen
+      phone={phone}
+      onBack={() => setScreen('phone')}
+    />
+  );
+}
