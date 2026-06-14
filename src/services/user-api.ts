@@ -233,9 +233,28 @@ export async function updateSeller(id: string, input: UpdateSellerInput): Promis
   });
 }
 
-// Returns all seller accounts linked to a user — used by the multi-store switcher
-export async function getSellersByUser(userId: string): Promise<Seller[]> {
-  const result = await request<Seller[]>(`/v1/users/${userId}/sellers`);
+// Extends Seller with the user's role in that store (owner / manager / staff)
+export interface SellerWithRole extends Seller {
+  memberRole: SellerRole;
+}
+
+export interface PendingInvite {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  role: SellerRole;
+  invitedAt: string;
+}
+
+// Returns all seller accounts linked to a user (owned + active member stores)
+export async function getSellersByUser(userId: string): Promise<SellerWithRole[]> {
+  const result = await request<SellerWithRole[]>(`/v1/users/${userId}/sellers`);
+  return result ?? [];
+}
+
+// Returns pending invites for a phone number — called after login when user has no stores
+export async function getPendingInvites(phone: string): Promise<PendingInvite[]> {
+  const result = await request<PendingInvite[]>(`/v1/members/pending?phone=${encodeURIComponent(phone)}`);
   return result ?? [];
 }
 

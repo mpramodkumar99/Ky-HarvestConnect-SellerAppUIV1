@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AppTabs from '@/components/app-tabs';
 import { AuthFlow } from '@/components/auth-flow';
 import { CreateStoreModal } from '@/components/create-store-modal';
+import { PendingInviteModal } from '@/components/pending-invite-modal';
 import { useAuth } from '@/context/auth-context';
 import { useStore } from '@/context/store-context';
 import { useToast } from '@/components/toast-provider';
@@ -99,7 +100,8 @@ function OnboardingScreen() {
 
 export default function AppGate() {
   const { initializing, isAuthenticated } = useAuth();
-  const { stores, loadingStores } = useStore();
+  const { stores, loadingStores, pendingInvites } = useStore();
+  const [invitesDismissed, setInvitesDismissed] = useState(false);
 
   // Auth check in progress — AnimatedSplashOverlay covers the first 900ms
   if (initializing) {
@@ -125,13 +127,33 @@ export default function AppGate() {
     );
   }
 
+  // Logged in, has pending invites and no stores yet — show invite screen
+  if (!loadingStores && stores.length === 0 && pendingInvites.length > 0 && !invitesDismissed) {
+    return (
+      <PendingInviteModal
+        visible
+        onDone={() => setInvitesDismissed(true)}
+      />
+    );
+  }
+
   // Logged in, no stores — onboarding
   if (stores.length === 0) {
     return <OnboardingScreen />;
   }
 
-  // All good — main app
-  return <AppTabs />;
+  // All good — main app; show invite modal on top if invites arrived after stores loaded
+  return (
+    <>
+      <AppTabs />
+      {pendingInvites.length > 0 && !invitesDismissed && (
+        <PendingInviteModal
+          visible
+          onDone={() => setInvitesDismissed(true)}
+        />
+      )}
+    </>
+  );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────

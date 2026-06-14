@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { SellerType, ShipsTo, SellerRole, MemberStatus, Seller } from '@/services/user-api';
-import { getSeller, listMembers, getSellersByUser } from '@/services/user-api';
+import type { SellerType, ShipsTo, SellerRole, MemberStatus, Seller, PendingInvite } from '@/services/user-api';
+import { getSeller, listMembers, getSellersByUser, getUser, getPendingInvites, activateMember, removeMember } from '@/services/user-api';
 import { useAuth } from '@/context/auth-context';
 
 // Re-export so screens can import StoreRole from here without coupling to user-api
@@ -52,6 +52,9 @@ interface StoreContextValue {
   loadingTeam: boolean;
   newOrderCount: number;         // live count of 'new' orders — drives tab badge
   setNewOrderCount: (n: number) => void;
+  pendingInvites: PendingInvite[];  // invites awaiting acceptance by this user
+  acceptInvite: (sellerId: string, memberId: string) => Promise<void>;
+  declineInvite: (sellerId: string, memberId: string) => Promise<void>;
   setActiveStore: (store: Store) => void;
   addStore: (store: Store) => void;  // called after createSeller succeeds
   updateStoreStatus: (id: string, status: 'live' | 'offline') => void;
@@ -100,12 +103,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const userId = session?.userId ?? null;
 
-  const [storeList, setStoreList]         = useState<Store[]>([]);
-  const [activeStoreId, setActiveStoreId] = useState<string>('');
-  const [teamMembers, setTeamMembers]     = useState<TeamMember[]>([]);
-  const [loadingStores, setLoadingStores] = useState(false);
-  const [loadingTeam, setLoadingTeam]     = useState(false);
-  const [newOrderCount, setNewOrderCount] = useState(0);
+  const [storeList, setStoreList]           = useState<Store[]>([]);
+  const [activeStoreId, setActiveStoreId]   = useState<string>('');
+  const [teamMembers, setTeamMembers]       = useState<TeamMember[]>([]);
+  const [loadingStores, setLoadingStores]   = useState(false);
+  const [loadingTeam, setLoadingTeam]       = useState(false);
+  const [newOrderCount, setNewOrderCount]   = useState(0);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
 
   const activeStore = storeList.find(s => s.id === activeStoreId) ?? storeList[0];
 
@@ -115,15 +119,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setStoreList([]);
       setActiveStoreId('');
       setTeamMembers([]);
+      setPendingInvites([]);
       return;
     }
     async function fetchUserStores() {
       setLoadingStores(true);
       try {
         const sellers = await getSellersByUser(userId);
-        const stores  = sellers.map(s => sellerToStore(s));
+        const stores  = sellers.map(s => sellerToStore(s, s.memberRole));
         setStoreList(stores);
-        if (stores.length > 0) setActiveStoreId(prev => prev || stores[0].id);
+        if (stores.length > 0) {
+          setActiveStoreId(prev => prev || stores[0].id);
+          setPendingInvites([]);
+        } else {
+          // No owned or member stores — check for pending invites by phone
+          try {
+            const user    = await getUser(userId);
+            const invites = await getPendingInvites(user.phone);
+            setPendingInvites(invites);
+          } catch {
+            setPendingInvites([]);
+          }
+        }
       } catch {
         setStoreList([]);
       } finally {
@@ -169,6 +186,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     } catch { /* silent — keep current data */ }
   }, []);
 
+  const acceptInvite = useCallback(async (sellerId: string, memberId: string) => {
+    if (!userId) return;
+    await activateMember(sellerId, memberId, userId);
+    setPendingInvites(prev => prev.filter(i => i.id !== memberId));
+    // Re-fetch stores so the newly accepted store appears
+    const sellers = await getSellersByUser(userId);
+    const stores  = sellers.map(s => sellerToStore(s, s.memberRole));
+    setStoreList(stores);
+    if (stores.length > 0) setActiveStoreId(prev => prev || stores[0].id);
+  }, [userId]);
+
+  const declineInvite = useCallback(async (sellerId: string, memberId: string) => {
+    await removeMember(sellerId, memberId);
+    setPendingInvites(prev => prev.filter(i => i.id !== memberId));
+  }, []);
+
   const handleSetActiveStore = useCallback((store: Store) => {
     setActiveStoreId(store.id);
   }, []);
@@ -191,6 +224,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       loadingTeam,
       newOrderCount,
       setNewOrderCount,
+      pendingInvites,
+      acceptInvite,
+      declineInvite,
       setActiveStore: handleSetActiveStore,
       addStore,
       updateStoreStatus,

@@ -7,6 +7,7 @@ import { KycBadge, RoleBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
 import { BankAccountModal } from '@/components/bank-account-modal';
 import { InviteMemberModal } from '@/components/invite-member-modal';
+import { MemberActionModal } from '@/components/member-action-modal';
 import { EditStoreModal } from '@/components/edit-store-modal';
 import { DeliveryZonesModal } from '@/components/delivery-zones-modal';
 import { KycUploadModal } from '@/components/kyc-upload-modal';
@@ -58,7 +59,8 @@ export default function ProfileScreen() {
   const [switcherOpen, setSwitcherOpen]         = useState(false);
   const [bankAccount, setBankAccountState]       = useState<BankAccount | null>(null);
   const [bankModalOpen, setBankModalOpen]        = useState(false);
-  const [inviteModalOpen, setInviteModalOpen]   = useState(false);
+  const [inviteModalOpen, setInviteModalOpen]     = useState(false);
+  const [memberAction,    setMemberAction]        = useState<import('@/context/store-context').TeamMember | null>(null);
   const [editStoreOpen,   setEditStoreOpen]     = useState(false);
   const [zonesOpen,       setZonesOpen]         = useState(false);
   const [kycOpen,         setKycOpen]           = useState(false);
@@ -166,6 +168,16 @@ export default function ProfileScreen() {
         onInvited={() => {
           refreshTeam();
           showToast('Invite sent successfully!', 'success');
+        }}
+      />
+      <MemberActionModal
+        visible={!!memberAction}
+        member={memberAction}
+        sellerId={activeStore.id}
+        onClose={() => setMemberAction(null)}
+        onUpdated={() => {
+          refreshTeam();
+          showToast('Team updated.', 'success');
         }}
       />
       <EditStoreModal
@@ -410,8 +422,13 @@ export default function ProfileScreen() {
           )}
           {!loadingTeam && teamMembers.map((member, i) => {
             const rc = ROLE_CONFIG[member.role];
+            const tappable = perms.canInviteMembers && member.role !== 'owner';
             return (
-              <View key={member.id} style={[s.memberRow, i > 0 && s.memberRowBorder]}>
+              <Pressable
+                key={member.id}
+                style={[s.memberRow, i > 0 && s.memberRowBorder]}
+                onPress={tappable ? () => setMemberAction(member) : undefined}
+                disabled={!tappable}>
                 <View style={s.memberAvatar}>
                   <Text style={s.memberAvatarTxt}>{member.avatar}</Text>
                 </View>
@@ -442,7 +459,12 @@ export default function ProfileScreen() {
                     </Text>
                   </View>
                 </View>
-              </View>
+                {tappable && (
+                  <View style={{ justifyContent: 'center', paddingLeft: 4 }}>
+                    <Text style={{ fontSize: 16, color: '#d1d5db' }}>›</Text>
+                  </View>
+                )}
+              </Pressable>
             );
           })}
         </View>
