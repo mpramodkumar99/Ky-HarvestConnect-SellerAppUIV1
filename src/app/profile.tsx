@@ -32,7 +32,7 @@ type MenuItem = {
 
 const menuItems: MenuItem[] = [
   { icon: '🏪', label: 'Store Settings',      desc: 'Store name, photo, description, category' },
-  { icon: '🌾', label: 'My Products',          desc: 'Manage your product catalogue', badge: '6 listed', route: '/products' },
+  { icon: '🌾', label: 'My Products',          desc: 'Manage your product catalogue', route: '/products' },
   { icon: '📦', label: 'Order History',        desc: 'All completed and cancelled orders',            route: '/orders' },
   { icon: '💳', label: 'Bank & Payouts',       desc: 'Manage payout account · T+1 settlement', highlight: true, comingSoon: true },
   { icon: '📊', label: 'Transaction History',  desc: 'All credits, debits, and commissions',          comingSoon: true },
@@ -122,6 +122,13 @@ export default function ProfileScreen() {
     );
   }
 
+  // Inject dynamic product count into My Products badge
+  const displayMenuItems = menuItems.map(item =>
+    item.label === 'My Products' && productCount !== null
+      ? { ...item, badge: `${productCount} listed` }
+      : item
+  );
+
   // Derive owner name and "seller since" from team members
   const owner = teamMembers.find((m) => m.role === 'owner');
   const ownerDisplay = owner
@@ -200,7 +207,7 @@ export default function ProfileScreen() {
                 <Text style={s.avatarText}>{activeStore.icon}</Text>
               </View>
               <View style={s.switchBadge}>
-                <Text style={{ fontSize: 10 }}>⌄</Text>
+                <View style={s.arrowDown} />
               </View>
             </Pressable>
             <View style={{ flex: 1 }}>
@@ -222,7 +229,9 @@ export default function ProfileScreen() {
                 }
                 setEditStoreOpen(true);
               }}>
-              <Text style={{ fontSize: 16 }}>✏️</Text>
+              <View style={{ transform: [{ scaleX: -1 }] }}>
+                <Text style={{ fontSize: 16 }}>✏️</Text>
+              </View>
             </Pressable>
           </View>
 
@@ -335,18 +344,25 @@ export default function ProfileScreen() {
                   <Text style={{ fontSize: 22 }}>{store.icon}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <Text style={[s.storeCardName, isActive && s.storeCardNameActive]}>{store.name}</Text>
                     <View style={[s.rolePill, { backgroundColor: rc.bg }]}>
                       <Text style={[s.rolePillTxt, { color: rc.color }]}>{rc.label}</Text>
                     </View>
                     {isActive && (
                       <View style={s.activeDot}>
-                        <Text style={{ fontSize: 8, color: '#fff', fontWeight: '700' }}>Active</Text>
+                        <Text style={{ fontSize: 8, color: '#fff', fontWeight: '700' }}>Viewing</Text>
                       </View>
                     )}
                   </View>
-                  <Text style={s.storeCardMeta}>{store.productCount} products · {store.ordersToday} orders today · {store.revenueToday}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                    <View style={[s.storeStatusPill, store.status === 'live' ? s.storeStatusLive : s.storeStatusOffline]}>
+                      <Text style={[s.storeStatusTxt, store.status === 'live' ? s.storeStatusLiveTxt : s.storeStatusOfflineTxt]}>
+                        {store.status === 'live' ? '● Live' : '○ Offline'}
+                      </Text>
+                    </View>
+                    <Text style={s.storeCardMeta}>{store.productCount} products · {store.ordersToday} orders today</Text>
+                  </View>
                 </View>
                 <Text style={{ fontSize: 16, color: isActive ? '#2d7a47' : '#d1d5db' }}>
                   {isActive ? '✓' : '›'}
@@ -418,7 +434,7 @@ export default function ProfileScreen() {
 
       {/* Menu Items */}
       <View style={s.menuSection}>
-        {menuItems.map((item, i) => (
+        {displayMenuItems.map((item, i) => (
           <Pressable key={i} style={[s.menuItem, item.highlight && s.menuItemHL]} onPress={() => handleMenuPress(item)}>
             <View style={[s.menuIcon, item.highlight && s.menuIconHL]}>
               <Text style={{ fontSize: 18 }}>{item.icon}</Text>
@@ -492,16 +508,32 @@ const s = StyleSheet.create({
   avatarText: { fontSize: 36 },
   switchBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 22,
-    height: 22,
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
     backgroundColor: '#fff',
-    borderRadius: 11,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderWidth: 2,
+    borderColor: '#2d7a47',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  arrowDown: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 6,
+    borderStyle: 'solid',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#1a4a28',
+    marginTop: 2,
   },
   storeName: { fontSize: 20, fontWeight: '700', color: '#fff' },
   sellerName: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
@@ -690,6 +722,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
+  storeStatusPill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
+  storeStatusLive:    { backgroundColor: '#dcfce7' },
+  storeStatusOffline: { backgroundColor: '#f3f4f6' },
+  storeStatusTxt:        { fontSize: 10, fontWeight: '700' },
+  storeStatusLiveTxt:    { color: '#166534' },
+  storeStatusOfflineTxt: { color: '#6b7280' },
 
   inviteBtn: {
     backgroundColor: '#f0fdf4',

@@ -21,6 +21,7 @@ export interface Store {
   deliveryZones: ShipsTo[]; // seller-level delivery coverage
   verified: boolean;
   fssaiNumber?: string;
+  status: 'live' | 'offline';  // store operational status — client-side only
   role: SellerRole;       // this user's role within the seller account
   memberCount: number;
   productCount: number;
@@ -50,6 +51,7 @@ interface StoreContextValue {
   loadingTeam: boolean;
   setActiveStore: (store: Store) => void;
   addStore: (store: Store) => void;  // called after createSeller succeeds
+  updateStoreStatus: (id: string, status: 'live' | 'offline') => void;
   refreshTeam: () => Promise<void>;
   refreshSeller: (id: string) => Promise<void>;
 }
@@ -72,6 +74,7 @@ const STORES: Store[] = [
     deliveryZones: ['mandal', 'district'],
     verified: true,
     fssaiNumber: '10019042000112',
+    status: 'live',
     role: 'owner',
     memberCount: 3,
     productCount: 6,
@@ -91,6 +94,7 @@ const STORES: Store[] = [
     deliveryZones: ['mandal', 'district', 'state'],
     verified: true,
     fssaiNumber: '10019042000113',
+    status: 'live',
     role: 'owner',
     memberCount: 1,
     productCount: 12,
@@ -110,6 +114,7 @@ const STORES: Store[] = [
     deliveryZones: ['state', 'national'],
     verified: true,
     fssaiNumber: '10019042000105',
+    status: 'live',
     role: 'manager',
     memberCount: 4,
     productCount: 18,
@@ -222,7 +227,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setStoreList(prev =>
         prev.map(s => {
           const seed = STORES.find(ss => ss.id === id);
-          return s.id === id && seed ? mergeLiveSeller(seed, live) : s;
+          if (s.id !== id || !seed) return s;
+          return { ...mergeLiveSeller(seed, live), status: s.status };
         })
       );
     } catch { /* silent — keep current data */ }
@@ -237,6 +243,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setActiveStoreId(store.id);
   }, []);
 
+  const updateStoreStatus = useCallback((id: string, status: 'live' | 'offline') => {
+    setStoreList(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+  }, []);
+
   return (
     <StoreContext.Provider value={{
       stores: storeList,
@@ -246,6 +256,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       loadingTeam,
       setActiveStore: handleSetActiveStore,
       addStore,
+      updateStoreStatus,
       refreshTeam,
       refreshSeller,
     }}>

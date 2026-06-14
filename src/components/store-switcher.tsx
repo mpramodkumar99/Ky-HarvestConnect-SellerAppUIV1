@@ -74,11 +74,18 @@ export function StoreSwitcher({ visible, onClose }: Props) {
                     </View>
                     {isActive && (
                       <View style={s.activePill}>
-                        <Text style={s.activePillTxt}>Active</Text>
+                        <Text style={s.activePillTxt}>Viewing</Text>
                       </View>
                     )}
                   </View>
-                  <Text style={s.storeCat}>{store.category}</Text>
+                  <View style={s.statusRow}>
+                    <View style={[s.statusPill, store.status === 'live' ? s.statusPillLive : s.statusPillOff]}>
+                      <Text style={[s.statusTxt, store.status === 'live' ? s.statusTxtLive : s.statusTxtOff]}>
+                        {store.status === 'live' ? '● Live' : '○ Offline'}
+                      </Text>
+                    </View>
+                    <Text style={s.storeCat}>{store.category}</Text>
+                  </View>
                   <Text style={s.storeLoc}>📍 {store.location}</Text>
                   <View style={s.metaRow}>
                     <Text style={s.metaTxt}>{store.productCount} products</Text>
@@ -203,6 +210,13 @@ const s = StyleSheet.create({
     paddingVertical: 2,
   },
   activePillTxt: { fontSize: 10, fontWeight: '700', color: '#fff' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusPill: { borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 },
+  statusPillLive: { backgroundColor: '#dcfce7' },
+  statusPillOff:  { backgroundColor: '#f3f4f6' },
+  statusTxt:     { fontSize: 10, fontWeight: '700' },
+  statusTxtLive: { color: '#166534' },
+  statusTxtOff:  { color: '#6b7280' },
   storeCat: { fontSize: 11, color: '#6b7280' },
   storeLoc: { fontSize: 11, color: '#9ca3af' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },

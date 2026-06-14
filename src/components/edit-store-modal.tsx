@@ -3,7 +3,7 @@ import {
   Modal, View, Text, TextInput, Pressable, StyleSheet, ScrollView,
 } from 'react-native';
 import { updateSeller } from '@/services/user-api';
-import { SELLER_TYPE_CONFIG } from '@/context/store-context';
+import { SELLER_TYPE_CONFIG, useStore } from '@/context/store-context';
 import type { Store } from '@/context/store-context';
 import type { SellerType } from '@/services/user-api';
 
@@ -17,9 +17,11 @@ interface Props {
 }
 
 export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
+  const { updateStoreStatus } = useStore();
   const [name,        setName]        = useState('');
   const [description, setDescription] = useState('');
   const [type,        setType]        = useState<SellerType>('farmer');
+  const [status,      setStatus]      = useState<'live' | 'offline'>('live');
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
 
@@ -28,6 +30,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
       setName(store.name);
       setDescription(store.description ?? '');
       setType(store.type);
+      setStatus(store.status);
       setError('');
     }
   }, [visible, store]);
@@ -44,6 +47,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
         description: description.trim() || undefined,
         type,
       });
+      updateStoreStatus(store.id, status);
       onUpdated();
       onClose();
     } catch (err) {
@@ -118,6 +122,34 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
                     </Pressable>
                   );
                 })}
+              </View>
+            </View>
+
+            <View style={s.field}>
+              <Text style={s.label}>Store Status</Text>
+              <View style={s.statusRow}>
+                <Pressable
+                  style={[s.statusBtn, status === 'live' && s.statusBtnLive]}
+                  onPress={() => setStatus('live')}
+                  disabled={loading}>
+                  <Text style={{ fontSize: 22 }}>🟢</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.statusLabel, status === 'live' && s.statusLabelLive]}>Live</Text>
+                    <Text style={s.statusDesc}>Visible · accepting orders</Text>
+                  </View>
+                  {status === 'live' && <Text style={s.statusCheck}>✓</Text>}
+                </Pressable>
+                <Pressable
+                  style={[s.statusBtn, status === 'offline' && s.statusBtnOffline]}
+                  onPress={() => setStatus('offline')}
+                  disabled={loading}>
+                  <Text style={{ fontSize: 22 }}>⚫</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.statusLabel, status === 'offline' && s.statusLabelOffline]}>Offline</Text>
+                    <Text style={s.statusDesc}>Hidden from buyers</Text>
+                  </View>
+                  {status === 'offline' && <Text style={[s.statusCheck, { color: '#6b7280' }]}>✓</Text>}
+                </Pressable>
               </View>
             </View>
 
@@ -208,6 +240,26 @@ const s = StyleSheet.create({
   typeChipActive: { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
   typeLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
   typeLabelActive: { color: '#166534' },
+
+  statusRow: { flexDirection: 'row', gap: 10 },
+  statusBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  statusBtnLive:    { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
+  statusBtnOffline: { borderColor: '#6b7280', backgroundColor: '#f9fafb' },
+  statusLabel:        { fontSize: 13, fontWeight: '700', color: '#374151' },
+  statusLabelLive:    { color: '#166534' },
+  statusLabelOffline: { color: '#374151' },
+  statusDesc:  { fontSize: 10, color: '#9ca3af', marginTop: 2 },
+  statusCheck: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
 
   errorBox: {
     backgroundColor: '#fff5f5',
