@@ -60,86 +60,12 @@ interface StoreContextValue {
 // Live fields (name, type, phone, location, pincode, deliveryZones, description,
 // imageUrl, verified, fssaiNumber) are overwritten by UserSvc on mount.
 
-const STORES: Store[] = [
-  {
-    id: 'seller-112',
-    name: 'Desi Dairy Armoor',
-    type: 'dairy',
-    category: 'Dairy & Animal Products',
-    icon: '🥛',
-    description: 'Fresh milk, curd and paneer sourced directly from our Armoor farm.',
-    location: 'Armoor, Nizamabad',
-    phone: '+919000000112',
-    pincode: '503111',
-    deliveryZones: ['mandal', 'district'],
-    verified: true,
-    fssaiNumber: '10019042000112',
-    status: 'live',
-    role: 'owner',
-    memberCount: 3,
-    productCount: 6,
-    ordersToday: 18,
-    revenueToday: '₹4,280',
-  },
-  {
-    id: 'seller-113',
-    name: 'Amma Kitchen',
-    type: 'homefood',
-    category: 'Home Foods & Pickles',
-    icon: '🍱',
-    description: 'Traditional Telangana pickles and home-made snacks made with love.',
-    location: 'Nizamabad, Telangana',
-    phone: '+919000000113',
-    pincode: '503001',
-    deliveryZones: ['mandal', 'district', 'state'],
-    verified: true,
-    fssaiNumber: '10019042000113',
-    status: 'live',
-    role: 'owner',
-    memberCount: 1,
-    productCount: 12,
-    ordersToday: 7,
-    revenueToday: '₹2,100',
-  },
-  {
-    id: 'seller-105',
-    name: 'Spice Route Nizamabad',
-    type: 'farmer',
-    category: 'Vegetables & Spices',
-    icon: '🌶️',
-    description: 'Organic turmeric, chillies and seasonal vegetables from Nizamabad district.',
-    location: 'Nizamabad, Telangana',
-    phone: '+919000000105',
-    pincode: '503001',
-    deliveryZones: ['state', 'national'],
-    verified: true,
-    fssaiNumber: '10019042000105',
-    status: 'live',
-    role: 'manager',
-    memberCount: 4,
-    productCount: 18,
-    ordersToday: 24,
-    revenueToday: '₹8,640',
-  },
-];
+// Seed stores cleared for testing the Create New Store onboarding flow.
+// Restore the entries below once onboarding testing is complete.
+const STORES: Store[] = [];
 
-// Fallback team seed — used when UserSvc is unreachable
-const TEAM_SEED: Record<string, TeamMember[]> = {
-  'seller-112': [
-    { id: 'm1', sellerId: 'seller-112', name: 'Sridevi Reddy',  phone: '+919876543210', role: 'owner',   status: 'active',  avatar: 'SR', invitedAt: '2023-10-01T00:00:00.000Z', joinedAt: '2023-10-01T00:00:00.000Z' },
-    { id: 'm2', sellerId: 'seller-112', name: 'Ramesh Kumar',   phone: '+919123456789', role: 'manager', status: 'active',  avatar: 'RK', invitedAt: '2024-01-10T00:00:00.000Z', joinedAt: '2024-01-12T00:00:00.000Z' },
-    { id: 'm3', sellerId: 'seller-112', name: 'Meena Devi',     phone: '+918765432109', role: 'staff',   status: 'pending', avatar: 'MD', invitedAt: '2026-06-10T00:00:00.000Z' },
-  ],
-  'seller-113': [
-    { id: 'm4', sellerId: 'seller-113', name: 'Sridevi Reddy',  phone: '+919876543210', role: 'owner',   status: 'active',  avatar: 'SR', invitedAt: '2024-03-01T00:00:00.000Z', joinedAt: '2024-03-01T00:00:00.000Z' },
-  ],
-  'seller-105': [
-    { id: 'm5', sellerId: 'seller-105', name: 'Priya Sharma',   phone: '+919988776655', role: 'owner',   status: 'active',  avatar: 'PS', invitedAt: '2024-02-01T00:00:00.000Z', joinedAt: '2024-02-01T00:00:00.000Z' },
-    { id: 'm6', sellerId: 'seller-105', name: 'Sridevi Reddy',  phone: '+919876543210', role: 'manager', status: 'active',  avatar: 'SR', invitedAt: '2024-04-01T00:00:00.000Z', joinedAt: '2024-04-03T00:00:00.000Z' },
-    { id: 'm7', sellerId: 'seller-105', name: 'Venkat Rao',     phone: '+918899011223', role: 'staff',   status: 'active',  avatar: 'VR', invitedAt: '2024-05-01T00:00:00.000Z', joinedAt: '2024-05-02T00:00:00.000Z' },
-    { id: 'm8', sellerId: 'seller-105', name: 'Sunita Devi',    phone: '+919753124680', role: 'staff',   status: 'pending', avatar: 'SD', invitedAt: '2026-06-10T00:00:00.000Z' },
-  ],
-};
+// Fallback team seed — cleared with STORES for onboarding testing
+const TEAM_SEED: Record<string, TeamMember[]> = {};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
