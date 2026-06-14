@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Alert, ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -7,9 +7,12 @@ import { KycBadge, RoleBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
 import { BankAccountModal } from '@/components/bank-account-modal';
 import { CreateStoreModal } from '@/components/create-store-modal';
+import { InviteMemberModal } from '@/components/invite-member-modal';
 import { useStore, ROLE_PERMISSIONS, ROLE_CONFIG, DELIVERY_ZONE_CONFIG } from '@/context/store-context';
 import { useToast } from '@/components/toast-provider';
 import { getBankAccount, setBankAccount as saveBankAccount, type BankAccount, type CreateBankAccountInput } from '@/services/user-api';
+import { listProducts } from '@/services/catalog-api';
+import { listOrders } from '@/services/order-api';
 
 type MenuItem = {
   icon: string;
@@ -36,15 +39,9 @@ const menuItems: MenuItem[] = [
   { icon: '⚙️', label: 'App Settings',        desc: 'Notifications, language, privacy' },
 ];
 
-const storeStats = [
-  { label: 'Products', value: '6', icon: '🌾' },
-  { label: 'Total Orders', value: '2,840', icon: '📦' },
-  { label: 'Rating', value: '4.8★', icon: '⭐' },
-  { label: 'Total GMV', value: '₹6.8L', icon: '💰' },
-];
 
 export default function ProfileScreen() {
-  const { stores, activeStore, teamMembers, loadingTeam, setActiveStore, addStore } = useStore();
+  const { stores, activeStore, teamMembers, loadingTeam, setActiveStore, addStore, refreshTeam } = useStore();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const router = useRouter();
   const { showToast } = useToast();
@@ -52,11 +49,20 @@ export default function ProfileScreen() {
   const [bankAccount, setBankAccountState]       = useState<BankAccount | null>(null);
   const [bankModalOpen, setBankModalOpen]        = useState(false);
   const [createStoreOpen, setCreateStoreOpen]   = useState(false);
+  const [inviteModalOpen, setInviteModalOpen]   = useState(false);
+  const [productCount, setProductCount]         = useState<number | null>(null);
+  const [orderCount, setOrderCount]             = useState<number | null>(null);
 
   useEffect(() => {
     getBankAccount(activeStore.id)
       .then(setBankAccountState)
       .catch(() => setBankAccountState(null));
+    listProducts({ sellerId: activeStore.id })
+      .then((ps) => setProductCount(ps.length))
+      .catch(() => setProductCount(null));
+    listOrders({ sellerId: activeStore.id })
+      .then((os) => setOrderCount(os.length))
+      .catch(() => setOrderCount(null));
   }, [activeStore.id]);
 
   async function handleSaveBankAccount(input: CreateBankAccountInput) {
@@ -72,6 +78,34 @@ export default function ProfileScreen() {
       showToast(`${item.label} is coming soon.`, 'info');
     }
   }
+
+  function handleLogout() {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out of the seller app?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: () => showToast('Logout will be available once auth is integrated.', 'info'),
+        },
+      ],
+    );
+  }
+
+  // Derive owner name and "seller since" from team members
+  const owner = teamMembers.find((m) => m.role === 'owner');
+  const ownerDisplay = owner
+    ? `${owner.name} · Seller since ${new Date(owner.joinedAt ?? owner.invitedAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`
+    : 'HarvestConnect Seller';
+
+  const storeStats = [
+    { label: 'Products',     value: productCount !== null ? String(productCount) : '…', icon: '🌾' },
+    { label: 'Total Orders', value: orderCount   !== null ? String(orderCount)   : '…', icon: '📦' },
+    { label: 'Rating',       value: '4.8★',  icon: '⭐' },
+    { label: 'Total GMV',    value: '₹6.8L', icon: '💰' },
+  ];
 
   return (
     <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
@@ -90,6 +124,15 @@ export default function ProfileScreen() {
         }}
         onClose={() => setCreateStoreOpen(false)}
       />
+      <InviteMemberModal
+        visible={inviteModalOpen}
+        sellerId={activeStore.id}
+        onClose={() => setInviteModalOpen(false)}
+        onInvited={() => {
+          refreshTeam();
+          showToast('Invite sent successfully!', 'success');
+        }}
+      />
       {/* Header */}
       <View style={s.header}>
         <SafeAreaView edges={['top']}>
@@ -107,7 +150,7 @@ export default function ProfileScreen() {
                 <Text style={s.storeName}>{activeStore.name}</Text>
                 <RoleBadge role={activeStore.role} />
               </View>
-              <Text style={s.sellerName}>Sridevi Reddy · Seller since Oct 2023</Text>
+              <Text style={s.sellerName}>{ownerDisplay}</Text>
               <View style={s.locationRow}>
                 <Text style={s.locationTxt}>📍 {activeStore.location}</Text>
               </View>
@@ -261,7 +304,7 @@ export default function ProfileScreen() {
             <Text style={s.sectionSub}>{activeStore.name}</Text>
           </View>
           {perms.canInviteMembers && (
-            <Pressable style={s.inviteBtn}>
+            <Pressable style={s.inviteBtn} onPress={() => setInviteModalOpen(true)}>
               <Text style={s.inviteBtnTxt}>＋ Invite</Text>
             </Pressable>
           )}
@@ -348,7 +391,7 @@ export default function ProfileScreen() {
 
       {/* Logout */}
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32 }}>
-        <Pressable style={s.logoutBtn}>
+        <Pressable style={s.logoutBtn} onPress={handleLogout}>
           <Text style={s.logoutText}>🚪  Logout</Text>
         </Pressable>
         <Text style={s.version}>HarvestConnect Seller · v1.0.0</Text>

@@ -1,148 +1,176 @@
-import { useState } from 'react';
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Alert, Linking, RefreshControl, ScrollView,
+  StyleSheet, Text, View, Pressable,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OrderStatusBadge } from '@/components/seller-ui';
 import { StoreSwitcher } from '@/components/store-switcher';
+import { DeclineReasonModal } from '@/components/decline-reason-modal';
+import { OrderDetailModal } from '@/components/order-detail-modal';
+import { OrderFilterModal, type OrderFilters } from '@/components/order-filter-modal';
 import { useStore } from '@/context/store-context';
+import {
+  listOrders, updateOrderStatus, cancelOrder,
+  toSellerTab, payMethodLabel, formatOrderDate,
+  type Order, type SellerTab,
+} from '@/services/order-api';
 
-type OrderStatus = 'new' | 'accepted' | 'dispatched' | 'delivered' | 'cancelled';
-
-interface OrderItem {
-  name: string;
-  qty: number;
-  price: number;
-}
-
-interface Order {
-  id: string;
-  buyer: string;
-  phone: string;
-  address: string;
-  items: OrderItem[];
-  total: number;
-  status: OrderStatus;
-  placedAt: string;
-  deliverySlot?: string;
-  paymentMode: 'UPI' | 'COD' | 'Card';
-}
-
-const allOrders: Order[] = [
-  {
-    id: 'HC-2406-0091',
-    buyer: 'Priya Sharma',
-    phone: '+91 98765 43210',
-    address: 'Flat 4B, Vasavi Apts, Kukatpally, Hyderabad',
-    items: [
-      { name: 'Organic Turmeric 500g', qty: 2, price: 249 },
-      { name: 'Red Chilli Powder 200g', qty: 1, price: 180 },
-    ],
-    total: 678,
-    status: 'new',
-    placedAt: '10:42 AM',
-    deliverySlot: 'Today, 4–6 PM',
-    paymentMode: 'UPI',
-  },
-  {
-    id: 'HC-2406-0090',
-    buyer: 'Ravi Kumar',
-    phone: '+91 91234 56789',
-    address: '12, Mig Colony, Miyapur, Hyderabad',
-    items: [
-      { name: 'Fresh Tomatoes 1 kg', qty: 3, price: 60 },
-    ],
-    total: 180,
-    status: 'new',
-    placedAt: '10:18 AM',
-    deliverySlot: 'Tomorrow, 7–9 AM',
-    paymentMode: 'COD',
-  },
-  {
-    id: 'HC-2406-0089',
-    buyer: 'Sunita Devi',
-    phone: '+91 87654 32109',
-    address: '303, Sai Nagar, KPHB, Hyderabad',
-    items: [
-      { name: 'Handwoven Cotton Towel', qty: 2, price: 350 },
-      { name: 'Neem Soap', qty: 4, price: 40 },
-    ],
-    total: 860,
-    status: 'accepted',
-    placedAt: '9:31 AM',
-    deliverySlot: 'Today, 2–4 PM',
-    paymentMode: 'UPI',
-  },
-  {
-    id: 'HC-2406-0085',
-    buyer: 'Mahesh Babu',
-    phone: '+91 99887 76655',
-    address: '7, Gokul Nagar, Kompally, Secunderabad',
-    items: [
-      { name: 'Coconut Oil 500ml', qty: 2, price: 320 },
-      { name: 'Coriander Seeds 250g', qty: 2, price: 90 },
-    ],
-    total: 820,
-    status: 'dispatched',
-    placedAt: 'Yesterday',
-    paymentMode: 'Card',
-  },
-  {
-    id: 'HC-2406-0080',
-    buyer: 'Anitha Reddy',
-    phone: '+91 97531 24680',
-    address: '22B, Prakash Nagar, Begumpet, Hyderabad',
-    items: [
-      { name: 'Organic Turmeric 500g', qty: 1, price: 249 },
-    ],
-    total: 249,
-    status: 'delivered',
-    placedAt: 'Jun 11',
-    paymentMode: 'UPI',
-  },
-  {
-    id: 'HC-2406-0078',
-    buyer: 'Venkat Rao',
-    phone: '+91 88990 11223',
-    address: 'Plot 9, Manikonda, Hyderabad',
-    items: [
-      { name: 'Brinjal 500g', qty: 2, price: 40 },
-    ],
-    total: 80,
-    status: 'cancelled',
-    placedAt: 'Jun 11',
-    paymentMode: 'COD',
-  },
-];
-
-const tabs: { label: string; value: OrderStatus | 'all' }[] = [
-  { label: 'New', value: 'new' },
-  { label: 'Accepted', value: 'accepted' },
+const TABS: { label: string; value: SellerTab }[] = [
+  { label: 'New',       value: 'new' },
+  { label: 'Accepted',  value: 'accepted' },
   { label: 'Dispatched', value: 'dispatched' },
   { label: 'Delivered', value: 'delivered' },
   { label: 'Cancelled', value: 'cancelled' },
 ];
 
-function countByStatus(status: OrderStatus) {
-  return allOrders.filter((o) => o.status === status).length;
-}
-
-function nextAction(status: OrderStatus): { label: string; color: string; bg: string } | null {
-  if (status === 'new') return { label: 'Accept Order ✓', color: '#fff', bg: '#2d7a47' };
-  if (status === 'accepted') return { label: 'Mark Dispatched 🚚', color: '#166534', bg: '#f0fdf4' };
-  if (status === 'dispatched') return { label: 'Mark Delivered ✓', color: '#1e40af', bg: '#eff6ff' };
+function nextAction(order: Order): { label: string; color: string; bg: string } | null {
+  if (order.status === 'confirmed' || order.status === 'pending_payment')
+    return { label: 'Accept Order ✓', color: '#fff', bg: '#2d7a47' };
+  if (order.status === 'processing')
+    return { label: 'Mark Dispatched 🚚', color: '#166534', bg: '#f0fdf4' };
+  if (order.status === 'dispatched' || order.status === 'in_transit')
+    return { label: 'Mark Delivered ✓', color: '#1e40af', bg: '#eff6ff' };
   return null;
 }
 
 export default function OrdersScreen() {
   const { activeStore } = useStore();
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<OrderStatus>('new');
+  const [activeTab, setActiveTab] = useState<SellerTab>('new');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [detailOrder, setDetailOrder] = useState<Order | null>(null);
+  const [declineOrder, setDeclineOrder] = useState<Order | null>(null);
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [filters, setFilters] = useState<OrderFilters>({ paymentMethod: null });
 
-  const filtered = allOrders.filter((o) => o.status === activeTab);
+  const fetchOrders = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    try {
+      const data = await listOrders({ sellerId: activeStore.id });
+      setOrders(data);
+    } catch {
+      if (!isRefresh) setOrders([]);
+    } finally {
+      if (isRefresh) setRefreshing(false); else setLoading(false);
+    }
+  }, [activeStore.id]);
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  function tabCount(tab: SellerTab) {
+    return orders.filter((o) => toSellerTab(o.status) === tab).length;
+  }
+
+  const filtered = orders
+    .filter((o) => toSellerTab(o.status) === activeTab)
+    .filter((o) => !filters.paymentMethod || o.paymentMethod === filters.paymentMethod);
+
+  function updateOrderInState(updated: Order) {
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+  }
+
+  async function handleAccept(order: Order) {
+    setActionLoading(order.id);
+    try {
+      const updated = await updateOrderStatus(order.id, 'processing');
+      updateOrderInState(updated);
+      setActiveTab('accepted');
+    } catch {
+      Alert.alert('Error', 'Failed to accept order. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleMarkDispatched(order: Order) {
+    setActionLoading(order.id);
+    try {
+      const updated = await updateOrderStatus(order.id, 'dispatched');
+      updateOrderInState(updated);
+      setActiveTab('dispatched');
+    } catch {
+      Alert.alert('Error', 'Failed to update order. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleMarkDelivered(order: Order) {
+    setActionLoading(order.id);
+    try {
+      const updated = await updateOrderStatus(order.id, 'delivered');
+      updateOrderInState(updated);
+      setActiveTab('delivered');
+    } catch {
+      Alert.alert('Error', 'Failed to update order. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleDeclineConfirm(reason: string) {
+    if (!declineOrder) return;
+    const target = declineOrder;
+    setActionLoading(target.id);
+    try {
+      const updated = await cancelOrder(target.id, reason);
+      updateOrderInState(updated);
+      setDeclineOrder(null);
+      setActiveTab('cancelled');
+    } catch {
+      Alert.alert('Error', 'Failed to decline order. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  function handlePrimaryAction(order: Order) {
+    if (order.status === 'confirmed' || order.status === 'pending_payment') handleAccept(order);
+    else if (order.status === 'processing') handleMarkDispatched(order);
+    else if (order.status === 'dispatched' || order.status === 'in_transit') handleMarkDelivered(order);
+  }
+
+  function handleCallBuyer(order: Order) {
+    Linking.openURL(`tel:${order.buyerPhone}`);
+  }
+
+  const hasActiveFilter = filters.paymentMethod !== null;
 
   return (
     <View style={s.screen}>
       <StoreSwitcher visible={switcherOpen} onClose={() => setSwitcherOpen(false)} />
+
+      <OrderDetailModal
+        visible={detailOrder !== null}
+        order={detailOrder}
+        onClose={() => setDetailOrder(null)}
+        onAccept={handleAccept}
+        onDecline={(o) => { setDetailOrder(null); setDeclineOrder(o); }}
+        onMarkDispatched={handleMarkDispatched}
+        onMarkDelivered={handleMarkDelivered}
+        actionLoading={detailOrder ? actionLoading === detailOrder.id : false}
+      />
+
+      <DeclineReasonModal
+        visible={declineOrder !== null}
+        orderId={declineOrder?.id ?? ''}
+        onClose={() => setDeclineOrder(null)}
+        onConfirm={handleDeclineConfirm}
+        loading={declineOrder ? actionLoading === declineOrder.id : false}
+      />
+
+      <OrderFilterModal
+        visible={filterVisible}
+        filters={filters}
+        onClose={() => setFilterVisible(false)}
+        onApply={(f) => { setFilters(f); setFilterVisible(false); }}
+      />
+
       {/* Header */}
       <View style={s.header}>
         <SafeAreaView edges={['top']}>
@@ -152,10 +180,13 @@ export default function OrdersScreen() {
                 <Text style={s.headerTitle}>Order Management</Text>
                 <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>⌄</Text>
               </View>
-              <Text style={s.headerSub}>{activeStore.name} · {countByStatus('new')} new · {countByStatus('accepted')} accepted</Text>
+              <Text style={s.headerSub}>
+                {activeStore.name} · {tabCount('new')} new · {tabCount('accepted')} accepted
+              </Text>
             </Pressable>
-            <Pressable style={s.filterBtn}>
+            <Pressable style={s.filterBtn} onPress={() => setFilterVisible(true)}>
               <Text style={{ fontSize: 16 }}>⚙️</Text>
+              {hasActiveFilter && <View style={s.filterDot} />}
             </Pressable>
           </View>
         </SafeAreaView>
@@ -164,13 +195,13 @@ export default function OrdersScreen() {
       {/* Tabs */}
       <View style={s.tabsWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
-          {tabs.map((tab) => {
-            const count = countByStatus(tab.value as OrderStatus);
+          {TABS.map((tab) => {
+            const count = tabCount(tab.value);
             return (
               <Pressable
                 key={tab.value}
                 style={[s.tab, activeTab === tab.value && s.tabActive]}
-                onPress={() => setActiveTab(tab.value as OrderStatus)}>
+                onPress={() => setActiveTab(tab.value)}>
                 <Text style={[s.tabTxt, activeTab === tab.value && s.tabTxtActive]}>
                   {tab.label}
                 </Text>
@@ -187,9 +218,36 @@ export default function OrdersScreen() {
         </ScrollView>
       </View>
 
+      {/* Filter active hint */}
+      {hasActiveFilter && (
+        <View style={s.filterHint}>
+          <Text style={s.filterHintTxt}>
+            Filtered by: {payMethodLabel(filters.paymentMethod!).replace(/^\S+ /, '')}
+          </Text>
+          <Pressable onPress={() => setFilters({ paymentMethod: null })}>
+            <Text style={s.filterHintClear}>Clear ✕</Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Order List */}
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
-        {filtered.length === 0 ? (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchOrders(true)}
+            colors={['#2d7a47']}
+            tintColor="#2d7a47"
+          />
+        }>
+        {loading ? (
+          <View style={s.emptyState}>
+            <Text style={{ fontSize: 32 }}>⏳</Text>
+            <Text style={s.emptyTitle}>Loading orders...</Text>
+          </View>
+        ) : filtered.length === 0 ? (
           <View style={s.emptyState}>
             <Text style={{ fontSize: 40 }}>📭</Text>
             <Text style={s.emptyTitle}>No {activeTab} orders</Text>
@@ -197,21 +255,27 @@ export default function OrdersScreen() {
           </View>
         ) : (
           filtered.map((order) => {
-            const action = nextAction(order.status);
+            const action = nextAction(order);
+            const isActionLoading = actionLoading === order.id;
+            const addrLine = [order.deliveryAddress.line1, order.deliveryAddress.city]
+              .filter(Boolean).join(', ');
+
             return (
-              <View key={order.id} style={s.orderCard}>
+              <Pressable
+                key={order.id}
+                style={s.orderCard}
+                onPress={() => setDetailOrder(order)}>
+
                 {/* Order Header */}
                 <View style={s.orderHead}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.orderId}>{order.id}</Text>
-                    <Text style={s.orderTime}>Placed {order.placedAt}</Text>
+                    <Text style={s.orderTime}>Placed {formatOrderDate(order.createdAt)}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                    <OrderStatusBadge status={order.status} />
+                    <OrderStatusBadge status={toSellerTab(order.status)} />
                     <View style={s.payMode}>
-                      <Text style={s.payModeTxt}>
-                        {order.paymentMode === 'COD' ? '💵' : '📱'} {order.paymentMode}
-                      </Text>
+                      <Text style={s.payModeTxt}>{payMethodLabel(order.paymentMethod)}</Text>
                     </View>
                   </View>
                 </View>
@@ -222,13 +286,12 @@ export default function OrdersScreen() {
                     <Text style={{ fontSize: 16 }}>👤</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.buyerName}>{order.buyer}</Text>
-                    <Text style={s.buyerAddr} numberOfLines={1}>{order.address}</Text>
-                    {order.deliverySlot && (
-                      <Text style={s.deliverySlot}>🕐 {order.deliverySlot}</Text>
-                    )}
+                    <Text style={s.buyerName}>{order.buyerName}</Text>
+                    <Text style={s.buyerAddr} numberOfLines={1}>{addrLine}</Text>
                   </View>
-                  <Pressable style={s.callBtn}>
+                  <Pressable
+                    style={s.callBtn}
+                    onPress={() => handleCallBuyer(order)}>
                     <Text style={{ fontSize: 16 }}>📞</Text>
                   </Pressable>
                 </View>
@@ -237,29 +300,34 @@ export default function OrdersScreen() {
                 <View style={s.itemsBox}>
                   {order.items.map((item, i) => (
                     <View key={i} style={s.itemRow}>
-                      <Text style={s.itemName}>{item.name}</Text>
-                      <Text style={s.itemQty}>× {item.qty}</Text>
-                      <Text style={s.itemPrice}>₹{item.price * item.qty}</Text>
+                      <Text style={s.itemName}>{item.productName}</Text>
+                      <Text style={s.itemQty}>× {item.quantity}</Text>
+                      <Text style={s.itemPrice}>₹{Math.round(item.totalPrice / 100)}</Text>
                     </View>
                   ))}
                   <View style={s.totalRow}>
                     <Text style={s.totalLabel}>Total</Text>
-                    <Text style={s.totalAmt}>₹{order.total}</Text>
+                    <Text style={s.totalAmt}>₹{Math.round(order.total / 100)}</Text>
                   </View>
                 </View>
 
-                {/* Action */}
+                {/* Actions */}
                 {action && (
                   <View style={s.actionRow}>
-                    {order.status === 'new' && (
-                      <Pressable style={s.declineBtn}>
+                    {(order.status === 'confirmed' || order.status === 'pending_payment') && (
+                      <Pressable
+                        style={s.declineBtn}
+                        onPress={() => setDeclineOrder(order)}
+                        disabled={isActionLoading}>
                         <Text style={s.declineTxt}>Decline</Text>
                       </Pressable>
                     )}
                     <Pressable
-                      style={[s.actionBtn, { backgroundColor: action.bg, flex: 1 }]}>
+                      style={[s.actionBtn, { backgroundColor: action.bg, flex: 1 }, isActionLoading && s.actionBtnLoading]}
+                      onPress={() => handlePrimaryAction(order)}
+                      disabled={isActionLoading}>
                       <Text style={[s.actionBtnTxt, { color: action.color }]}>
-                        {action.label}
+                        {isActionLoading ? 'Processing...' : action.label}
                       </Text>
                     </Pressable>
                   </View>
@@ -267,10 +335,19 @@ export default function OrdersScreen() {
 
                 {order.status === 'delivered' && (
                   <View style={s.completedRow}>
-                    <Text style={s.completedTxt}>✓ Order completed · ₹{Math.round(order.total * 0.93)} earned after 7% commission</Text>
+                    <Text style={s.completedTxt}>
+                      ✓ Order completed · ₹{Math.round(order.total * 0.93 / 100)} earned after 7% commission
+                    </Text>
                   </View>
                 )}
-              </View>
+
+                {(order.status === 'cancelled' || order.status === 'refund_initiated' || order.status === 'refunded') && order.cancelReason && (
+                  <View style={s.cancelRow}>
+                    <Text style={s.cancelTxt}>Reason: {order.cancelReason}</Text>
+                  </View>
+                )}
+
+              </Pressable>
             );
           })
         )}
@@ -298,12 +375,18 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 3 },
   filterBtn: {
-    width: 36,
-    height: 36,
+    width: 36, height: 36,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 4, right: 4,
+    width: 8, height: 8,
+    borderRadius: 4,
+    backgroundColor: '#f59e0b',
   },
 
   tabsWrap: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
@@ -323,8 +406,7 @@ const s = StyleSheet.create({
   tabBadge: {
     backgroundColor: '#e5e7eb',
     borderRadius: 99,
-    minWidth: 18,
-    height: 18,
+    minWidth: 18, height: 18,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
@@ -332,6 +414,19 @@ const s = StyleSheet.create({
   tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
   tabBadgeTxt: { fontSize: 10, fontWeight: '700', color: '#374151' },
   tabBadgeTxtActive: { color: '#fff' },
+
+  filterHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#fffbeb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fde68a',
+  },
+  filterHintTxt: { fontSize: 12, color: '#92400e', fontWeight: '600' },
+  filterHintClear: { fontSize: 12, color: '#d97706', fontWeight: '700' },
 
   listContent: { padding: 16, gap: 12, paddingBottom: 32 },
 
@@ -374,8 +469,7 @@ const s = StyleSheet.create({
     borderBottomColor: '#f3f4f6',
   },
   buyerAvatar: {
-    width: 36,
-    height: 36,
+    width: 36, height: 36,
     backgroundColor: '#f3f4f6',
     borderRadius: 18,
     alignItems: 'center',
@@ -383,10 +477,8 @@ const s = StyleSheet.create({
   },
   buyerName: { fontSize: 13, fontWeight: '600', color: '#111827' },
   buyerAddr: { fontSize: 11, color: '#6b7280', marginTop: 1 },
-  deliverySlot: { fontSize: 11, color: '#2d7a47', fontWeight: '600', marginTop: 2 },
   callBtn: {
-    width: 34,
-    height: 34,
+    width: 34, height: 34,
     backgroundColor: '#f0fdf4',
     borderRadius: 17,
     alignItems: 'center',
@@ -431,11 +523,16 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1fae5',
   },
+  actionBtnLoading: { opacity: 0.7 },
   actionBtnTxt: { fontSize: 13, fontWeight: '700' },
 
-  completedRow: {
+  completedRow: { padding: 12, paddingTop: 0 },
+  completedTxt: { fontSize: 11, color: '#6b7280', textAlign: 'center' },
+
+  cancelRow: {
     padding: 12,
     paddingTop: 0,
+    backgroundColor: '#fff5f5',
   },
-  completedTxt: { fontSize: 11, color: '#6b7280', textAlign: 'center' },
+  cancelTxt: { fontSize: 11, color: '#dc2626', fontStyle: 'italic' },
 });
