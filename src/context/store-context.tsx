@@ -49,6 +49,7 @@ interface StoreContextValue {
   activeStore: Store;
   teamMembers: TeamMember[];     // live members for the active store only
   loadingStores: boolean;
+  storesInitialized: boolean;    // true once the first fetch for this session has resolved
   loadingTeam: boolean;
   newOrderCount: number;         // live count of 'new' orders — drives tab badge
   setNewOrderCount: (n: number) => void;
@@ -103,13 +104,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const userId = session?.userId ?? null;
 
-  const [storeList, setStoreList]           = useState<Store[]>([]);
-  const [activeStoreId, setActiveStoreId]   = useState<string>('');
-  const [teamMembers, setTeamMembers]       = useState<TeamMember[]>([]);
-  const [loadingStores, setLoadingStores]   = useState(false);
-  const [loadingTeam, setLoadingTeam]       = useState(false);
-  const [newOrderCount, setNewOrderCount]   = useState(0);
-  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [storeList, setStoreList]               = useState<Store[]>([]);
+  const [activeStoreId, setActiveStoreId]       = useState<string>('');
+  const [teamMembers, setTeamMembers]           = useState<TeamMember[]>([]);
+  const [loadingStores, setLoadingStores]       = useState(false);
+  const [storesInitialized, setStoresInitialized] = useState(false);
+  const [loadingTeam, setLoadingTeam]           = useState(false);
+  const [newOrderCount, setNewOrderCount]       = useState(0);
+  const [pendingInvites, setPendingInvites]     = useState<PendingInvite[]>([]);
 
   const activeStore = storeList.find(s => s.id === activeStoreId) ?? storeList[0];
 
@@ -120,6 +122,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setActiveStoreId('');
       setTeamMembers([]);
       setPendingInvites([]);
+      setStoresInitialized(false);
       return;
     }
     async function fetchUserStores() {
@@ -145,6 +148,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         setStoreList([]);
       } finally {
         setLoadingStores(false);
+        setStoresInitialized(true);
       }
     }
     fetchUserStores();
@@ -225,6 +229,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       activeStore,
       teamMembers,
       loadingStores,
+      storesInitialized,
       loadingTeam,
       newOrderCount,
       setNewOrderCount,

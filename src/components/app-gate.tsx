@@ -100,7 +100,7 @@ function OnboardingScreen() {
 
 export default function AppGate() {
   const { initializing, isAuthenticated } = useAuth();
-  const { stores, loadingStores, pendingInvites } = useStore();
+  const { stores, loadingStores, storesInitialized, pendingInvites } = useStore();
   const [invitesDismissed, setInvitesDismissed] = useState(false);
 
   // Auth check in progress — AnimatedSplashOverlay covers the first 900ms
@@ -117,8 +117,9 @@ export default function AppGate() {
     return <AuthFlow />;
   }
 
-  // Logged in, still fetching stores
-  if (loadingStores && stores.length === 0) {
+  // Logged in but store fetch hasn't resolved yet (covers both the first-render
+  // window before the effect fires AND in-progress refreshes after login)
+  if (!storesInitialized || loadingStores) {
     return (
       <View style={s.loadingScreen}>
         <ActivityIndicator size="large" color="#2d7a47" />

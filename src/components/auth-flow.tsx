@@ -159,16 +159,30 @@ function SignupScreen({
   onSwitchToLogin: (phone: string) => void;
   onBack: () => void;
 }) {
-  const [name,    setName]    = useState('');
-  const [phone,   setPhone]   = useState('');
-  const [email,   setEmail]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const [offline, setOffline] = useState(false);
-  const [duplicate, setDuplicate] = useState(false);
+  const [name,          setName]          = useState('');
+  const [phone,         setPhone]         = useState('');
+  const [email,         setEmail]         = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [switchLoading, setSwitchLoading] = useState(false);
+  const [error,         setError]         = useState('');
+  const [offline,       setOffline]       = useState(false);
+  const [duplicate,     setDuplicate]     = useState(false);
 
   const digits    = phone.replace(/\D/g, '');
-  const canSubmit = name.trim().length >= 2 && digits.length === 10 && !loading;
+  const canSubmit = name.trim().length >= 2 && digits.length === 10 && !loading && !switchLoading;
+
+  async function handleSwitchToLogin() {
+    const normalized = normalizePhone(phone);
+    setSwitchLoading(true);
+    try {
+      await requestOtp(normalized);
+    } catch {
+      // Navigate anyway — OTP screen can resend if this failed
+    } finally {
+      setSwitchLoading(false);
+    }
+    onSwitchToLogin(normalized);
+  }
 
   async function handleSignup() {
     if (!canSubmit) return;
@@ -283,8 +297,11 @@ function SignupScreen({
                 {duplicate && (
                   <Pressable
                     style={sg.switchBtn}
-                    onPress={() => onSwitchToLogin(normalizePhone(phone))}>
-                    <Text style={sg.switchBtnTxt}>Log in with this number →</Text>
+                    onPress={handleSwitchToLogin}
+                    disabled={switchLoading}>
+                    <Text style={sg.switchBtnTxt}>
+                      {switchLoading ? 'Sending OTP…' : 'Log in with this number →'}
+                    </Text>
                   </Pressable>
                 )}
               </View>
