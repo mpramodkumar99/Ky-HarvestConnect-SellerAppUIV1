@@ -593,11 +593,6 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
     setError('');
     try {
       const session = await verifyOtp(phone, finalCode);
-      if (session.userType !== 'seller') {
-        setError('This account is not a seller account. Contact HarvestConnect support.');
-        setLoading(false);
-        return;
-      }
       await login(session);
       showToast('Welcome to HarvestConnect!', 'success');
     } catch (err) {

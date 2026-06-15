@@ -6,6 +6,7 @@ import {
 import type { SellerType, ShipsTo } from '@/services/user-api';
 import { createSeller } from '@/services/user-api';
 import { sellerToStore, SELLER_TYPE_CONFIG, DELIVERY_ZONE_CONFIG, type Store } from '@/context/store-context';
+import { useAuth } from '@/context/auth-context';
 
 interface Props {
   visible: boolean;
@@ -17,6 +18,7 @@ const SELLER_TYPES: SellerType[] = ['farmer', 'dairy', 'homefood', 'artisan', 't
 const DELIVERY_ZONES: ShipsTo[]  = ['mandal', 'district', 'state', 'national'];
 
 export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
+  const { session } = useAuth();
   const [name,         setName]         = useState('');
   const [type,         setType]         = useState<SellerType>('farmer');
   const [phone,        setPhone]        = useState('');
@@ -60,6 +62,7 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
     setSaving(true);
     try {
       const seller = await createSeller({
+        userId:        session?.userId,
         name:          name.trim(),
         type,
         phone:         normalizedPhone,
