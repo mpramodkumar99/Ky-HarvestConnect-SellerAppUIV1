@@ -11,19 +11,14 @@ import { StoreSwitcher } from '@/components/store-switcher';
 import { DeclineReasonModal } from '@/components/decline-reason-modal';
 import { PayoutModal } from '@/components/payout-modal';
 import { useStore } from '@/context/store-context';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import {
   listOrders, updateOrderStatus, cancelOrder,
   toSellerTab,
   type Order,
 } from '@/services/order-api';
 import { getBankAccount, type BankAccount } from '@/services/user-api';
-
-const quickActions: { icon: string; label: string; color: string; bg: string; route: string | null }[] = [
-  { icon: '➕', label: 'Add Product',    color: '#2d7a47', bg: '#dcfce7', route: '/products' },
-  { icon: '📦', label: 'View Orders',    color: '#1e40af', bg: '#dbeafe', route: '/orders' },
-  { icon: '💸', label: 'Request Payout', color: '#c97b1a', bg: '#fef3c7', route: null },
-  { icon: '📈', label: 'Analytics',      color: '#7c3aed', bg: '#ede9fe', route: '/analytics' },
-];
 
 
 function timeAgo(iso: string): string {
@@ -37,15 +32,18 @@ function timeAgo(iso: string): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function getGreeting(storeName: string): string {
+function getGreeting(storeName: string, t: (key: string) => string): string {
   const h = new Date().getHours();
-  const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const g = h < 12 ? t('dash_good_morning') : h < 17 ? t('dash_good_afternoon') : t('dash_good_evening');
   const firstName = storeName.split(' ')[0];
   return `${g}, ${firstName} 👋`;
 }
 
 export default function DashboardScreen() {
   const { activeStore, setNewOrderCount } = useStore();
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const router = useRouter();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -55,6 +53,13 @@ export default function DashboardScreen() {
   const [declineOrder, setDeclineOrder] = useState<Order | null>(null);
   const [payoutOpen, setPayoutOpen] = useState(false);
   const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
+
+  const quickActions: { icon: string; label: string; color: string; bg: string; route: string | null; key: string }[] = [
+    { icon: '➕', label: t('dash_add_product'),    color: '#2d7a47', bg: '#dcfce7', route: '/products', key: 'add_product' },
+    { icon: '📦', label: t('dash_view_orders'),    color: '#1e40af', bg: '#dbeafe', route: '/orders',   key: 'view_orders' },
+    { icon: '💸', label: t('dash_request_payout'), color: '#c97b1a', bg: '#fef3c7', route: null,        key: 'request_payout' },
+    { icon: '📈', label: t('dash_analytics'),      color: '#7c3aed', bg: '#ede9fe', route: '/analytics', key: 'analytics' },
+  ];
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -119,24 +124,20 @@ export default function DashboardScreen() {
     }
   }
 
-  // Derived stats
   const newCount      = orders.filter((o) => toSellerTab(o.status) === 'new').length;
   const pendingCount  = orders.filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status))).length;
 
-  // Sync new order count into context so the tab badge stays live
   useEffect(() => { setNewOrderCount(newCount); }, [newCount, setNewOrderCount]);
 
-  // Payout — 93% of all delivered orders (7% commission deducted)
   const deliveredOrders = orders.filter((o) => o.status === 'delivered');
-  const grossAmount        = Math.round(deliveredOrders.reduce((s, o) => s + o.total, 0) / 100);
+  const grossAmount        = Math.round(deliveredOrders.reduce((sum, o) => sum + o.total, 0) / 100);
   const availableForPayout = Math.round(grossAmount * 0.93);
 
-  // Today's revenue — delivered orders created today
   const todayStr = new Date().toDateString();
   const deliveredToday = deliveredOrders.filter(
     (o) => new Date(o.updatedAt ?? o.createdAt).toDateString() === todayStr
   );
-  const todayRevenue = Math.round(deliveredToday.reduce((s, o) => s + o.total, 0) / 100);
+  const todayRevenue = Math.round(deliveredToday.reduce((sum, o) => sum + o.total, 0) / 100);
   const todayRevenueStr = todayRevenue > 0
     ? `₹${todayRevenue.toLocaleString('en-IN')}`
     : orders.length === 0 ? '—' : '₹0';
@@ -146,8 +147,7 @@ export default function DashboardScreen() {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
-  // Store Health — compute what we can from order data
-  const totalOrders     = orders.filter((o) => o.status !== 'cancelled').length + orders.filter((o) => o.status === 'cancelled').length;
+  const totalOrders     = orders.length;
   const cancelledCount  = orders.filter((o) => o.status === 'cancelled').length;
   const fulfilledCount  = deliveredOrders.length;
   const nonCancelled    = orders.filter((o) => o.status !== 'cancelled').length;
@@ -159,17 +159,17 @@ export default function DashboardScreen() {
     : '—';
 
   const storeHealth = [
-    { label: 'Fulfilment Rate', value: fulfilmentRate, icon: '✅' },
-    { label: 'Avg Response',    value: '—',            icon: '⚡' },
-    { label: 'Store Rating',    value: '—',            icon: '⭐' },
-    { label: 'Cancel Rate',     value: returnRate,     icon: '↩️' },
+    { label: t('dash_fulfilment_rate'), value: fulfilmentRate, icon: '✅' },
+    { label: t('dash_avg_response'),    value: '—',            icon: '⚡' },
+    { label: t('dash_store_rating'),    value: '—',            icon: '⭐' },
+    { label: t('dash_cancel_rate'),     value: returnRate,     icon: '↩️' },
   ];
 
   const stats = [
-    { label: "Today's Revenue", value: todayRevenueStr,    icon: '💰', trend: '', up: true },
-    { label: 'New Orders',      value: String(newCount),   icon: '📦', trend: '', up: true },
-    { label: 'Pending',         value: String(pendingCount), icon: '⏳', trend: '', up: false },
-    { label: 'Store Views',     value: '—',                icon: '👁️', trend: '', up: true },
+    { label: t('dash_todays_revenue'), value: todayRevenueStr,      icon: '💰', trend: '', up: true },
+    { label: t('dash_new_orders'),     value: String(newCount),     icon: '📦', trend: '', up: true },
+    { label: t('dash_pending'),        value: String(pendingCount), icon: '⏳', trend: '', up: false },
+    { label: t('dash_store_views'),    value: '—',                  icon: '👁️', trend: '', up: true },
   ];
 
   return (
@@ -216,7 +216,7 @@ export default function DashboardScreen() {
                   <Text style={s.brandName}>{activeStore.name}</Text>
                   <Text style={s.brandChevron}>⌄</Text>
                 </View>
-                <Text style={s.brandSub}>{getGreeting(activeStore.name)}</Text>
+                <Text style={s.brandSub}>{getGreeting(activeStore.name, t)}</Text>
               </View>
             </Pressable>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -233,9 +233,9 @@ export default function DashboardScreen() {
             <Text style={s.payoutIcon}>💳</Text>
             <View style={{ flex: 1 }}>
               <Text style={s.payoutTitle}>
-                ₹{availableForPayout.toLocaleString('en-IN')} available for payout
+                ₹{availableForPayout.toLocaleString('en-IN')} {t('dash_available_payout')}
               </Text>
-              <Text style={s.payoutSub}>T+1 settlement · Tap to request</Text>
+              <Text style={s.payoutSub}>{t('dash_t1_settlement')}</Text>
             </View>
             <Text style={s.payoutArrow}>›</Text>
           </Pressable>
@@ -244,7 +244,7 @@ export default function DashboardScreen() {
 
       {/* Today's Stats */}
       <View style={s.section}>
-        <Text style={s.sectionTitle}>Today's Performance</Text>
+        <Text style={s.sectionTitle}>{t('dash_todays_performance')}</Text>
         <View style={s.statsGrid}>
           {stats.map((stat) => (
             <View key={stat.label} style={s.statCard}>
@@ -263,14 +263,14 @@ export default function DashboardScreen() {
 
       {/* Quick Actions */}
       <View style={s.section}>
-        <Text style={s.sectionTitle}>Quick Actions</Text>
+        <Text style={s.sectionTitle}>{t('dash_quick_actions')}</Text>
         <View style={s.actionsRow}>
           {quickActions.map((a) => (
             <Pressable
-              key={a.label}
+              key={a.key}
               style={s.actionBtn}
               onPress={() => {
-                if (a.label === 'Request Payout') { setPayoutOpen(true); return; }
+                if (a.key === 'request_payout') { setPayoutOpen(true); return; }
                 if (a.route) router.push(a.route as any);
               }}>
               <View style={[s.actionIcon, { backgroundColor: a.bg }]}>
@@ -290,22 +290,22 @@ export default function DashboardScreen() {
       <View style={s.section}>
         <View style={s.sectionHead}>
           <View>
-            <Text style={s.sectionTitle}>Incoming Orders</Text>
-            <Text style={s.sectionSub}>Requires your attention</Text>
+            <Text style={s.sectionTitle}>{t('dash_incoming_orders')}</Text>
+            <Text style={s.sectionSub}>{t('dash_requires_attention')}</Text>
           </View>
           <Pressable onPress={() => router.push('/orders')}>
-            <Text style={s.seeAll}>View All ›</Text>
+            <Text style={s.seeAll}>{t('dash_view_all')}</Text>
           </Pressable>
         </View>
 
         {loading ? (
           <View style={s.loadingBox}>
-            <Text style={s.loadingTxt}>Loading orders...</Text>
+            <Text style={s.loadingTxt}>{t('dash_loading_orders')}</Text>
           </View>
         ) : incomingOrders.length === 0 ? (
           <View style={s.emptyBox}>
             <Text style={{ fontSize: 28 }}>📭</Text>
-            <Text style={s.emptyTxt}>No pending orders</Text>
+            <Text style={s.emptyTxt}>{t('dash_no_pending_orders')}</Text>
           </View>
         ) : (
           <View style={{ gap: 10 }}>
@@ -350,14 +350,14 @@ export default function DashboardScreen() {
                           style={s.declineBtn}
                           onPress={() => setDeclineOrder(order)}
                           disabled={isLoading}>
-                          <Text style={s.declineTxt}>Decline</Text>
+                          <Text style={s.declineTxt}>{t('dash_decline')}</Text>
                         </Pressable>
                         <Pressable
                           style={[s.acceptBtn, isLoading && s.btnLoading]}
                           onPress={() => handleAccept(order)}
                           disabled={isLoading}>
                           <Text style={s.acceptTxt}>
-                            {isLoading ? '...' : 'Accept Order'}
+                            {isLoading ? '...' : t('dash_accept_order')}
                           </Text>
                         </Pressable>
                       </View>
@@ -367,7 +367,7 @@ export default function DashboardScreen() {
                         onPress={() => handleMarkDispatched(order)}
                         disabled={isLoading}>
                         <Text style={s.dispatchTxt}>
-                          {isLoading ? 'Processing...' : 'Mark Dispatched 🚚'}
+                          {isLoading ? t('dash_processing') : t('dash_mark_dispatched')}
                         </Text>
                       </Pressable>
                     )}
@@ -381,7 +381,7 @@ export default function DashboardScreen() {
 
       {/* Store Health */}
       <View style={[s.section, { paddingBottom: 32 }]}>
-        <Text style={s.sectionTitle}>Store Health</Text>
+        <Text style={s.sectionTitle}>{t('dash_store_health')}</Text>
         <View style={s.healthGrid}>
           {storeHealth.map((h) => (
             <View key={h.label} style={s.healthCard}>
@@ -395,10 +395,8 @@ export default function DashboardScreen() {
         <View style={s.tipCard}>
           <Text style={s.tipIcon}>💡</Text>
           <View style={{ flex: 1 }}>
-            <Text style={s.tipTitle}>Tip: Add harvest photos</Text>
-            <Text style={s.tipSub}>
-              Listings with farm photos get 3× more clicks. Add photos to your top 3 products.
-            </Text>
+            <Text style={s.tipTitle}>{t('dash_tip_title')}</Text>
+            <Text style={s.tipSub}>{t('dash_tip_sub')}</Text>
           </View>
         </View>
       </View>
@@ -406,187 +404,186 @@ export default function DashboardScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f9fafb' },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bgScreen },
 
-  header: {
-    backgroundColor: '#2d7a47',
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-    marginTop: 8,
-  },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  brandIcon: {
-    width: 44, height: 44,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  brandName: { color: '#fff', fontWeight: '700', fontSize: 17 },
-  brandChevron: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 },
-  brandSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 1 },
-  hBtn: {
-    width: 36, height: 36,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  notifDot: {
-    position: 'absolute',
-    top: 6, right: 6,
-    width: 7, height: 7,
-    borderRadius: 4,
-    backgroundColor: '#dc2626',
-    borderWidth: 1,
-    borderColor: '#2d7a47',
-  },
-  payoutBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-  },
-  payoutIcon: { fontSize: 22 },
-  payoutTitle: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  payoutSub: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 1 },
-  payoutArrow: { color: 'rgba(255,255,255,0.6)', fontSize: 20 },
+    header: {
+      backgroundColor: '#2d7a47',
+      paddingHorizontal: 16,
+      paddingBottom: 20,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 14,
+      marginTop: 8,
+    },
+    brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    brandIcon: {
+      width: 44, height: 44,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 22,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    brandName: { color: '#fff', fontWeight: '700', fontSize: 17 },
+    brandChevron: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 },
+    brandSub: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 1 },
+    hBtn: {
+      width: 36, height: 36,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 18,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    notifDot: {
+      position: 'absolute',
+      top: 6, right: 6,
+      width: 7, height: 7,
+      borderRadius: 4,
+      backgroundColor: '#dc2626',
+      borderWidth: 1,
+      borderColor: '#2d7a47',
+    },
+    payoutBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      borderRadius: 12,
+      padding: 12,
+      gap: 10,
+    },
+    payoutIcon: { fontSize: 22 },
+    payoutTitle: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    payoutSub: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 1 },
+    payoutArrow: { color: 'rgba(255,255,255,0.6)', fontSize: 20 },
 
-  section: { paddingHorizontal: 16, paddingTop: 16 },
-  sectionHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 12 },
-  sectionSub: { fontSize: 10, color: '#6b7280', marginTop: 2 },
-  seeAll: { fontSize: 12, color: '#2d7a47', fontWeight: '600' },
+    section: { paddingHorizontal: 16, paddingTop: 16 },
+    sectionHead: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 12,
+    },
+    sectionTitle: { fontSize: 15, fontWeight: '700', color: c.text, marginBottom: 12 },
+    sectionSub: { fontSize: 10, color: c.textMuted, marginTop: 2 },
+    seeAll: { fontSize: 12, color: c.primary, fontWeight: '600' },
 
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statCard: {
-    width: '47%',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    gap: 2,
-  },
-  statIcon: { fontSize: 20, marginBottom: 4 },
-  statVal: { fontSize: 22, fontWeight: '700', color: '#111827' },
-  statLbl: { fontSize: 11, color: '#6b7280' },
-  statTrend: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    statCard: {
+      width: '47%',
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      gap: 2,
+    },
+    statIcon: { fontSize: 20, marginBottom: 4 },
+    statVal: { fontSize: 22, fontWeight: '700', color: c.text },
+    statLbl: { fontSize: 11, color: c.textMuted },
+    statTrend: { fontSize: 11, fontWeight: '600', marginTop: 2 },
 
-  actionsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  actionBtn: { alignItems: 'center', gap: 6, flex: 1 },
-  actionIcon: {
-    width: 52, height: 52,
-    borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  actionLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
+    actionsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    actionBtn: { alignItems: 'center', gap: 6, flex: 1 },
+    actionIcon: {
+      width: 52, height: 52,
+      borderRadius: 16,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    actionLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
 
-  loadingBox: {
-    paddingVertical: 32,
-    alignItems: 'center',
-  },
-  loadingTxt: { fontSize: 13, color: '#9ca3af' },
-  emptyBox: {
-    paddingVertical: 28,
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  emptyTxt: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
+    loadingBox: { paddingVertical: 32, alignItems: 'center' },
+    loadingTxt: { fontSize: 13, color: c.textFaint },
+    emptyBox: {
+      paddingVertical: 28,
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    emptyTxt: { fontSize: 13, color: c.textMuted, fontWeight: '500' },
 
-  orderCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    gap: 10,
-  },
-  orderTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  orderId: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  orderBuyer: { fontSize: 11, color: '#6b7280', marginTop: 2 },
-  orderTime: { fontSize: 10, color: '#9ca3af' },
-  orderItems: { gap: 2 },
-  orderItem: { fontSize: 12, color: '#374151' },
-  orderItemMore: { fontSize: 11, color: '#9ca3af', fontStyle: 'italic' },
-  orderFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-    paddingTop: 10,
-  },
-  orderAmt: { fontSize: 16, fontWeight: '700', color: '#2d7a47' },
-  declineBtn: {
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  declineTxt: { fontSize: 12, color: '#6b7280', fontWeight: '600' },
-  acceptBtn: {
-    backgroundColor: '#2d7a47',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  acceptTxt: { fontSize: 12, color: '#fff', fontWeight: '700' },
-  dispatchBtn: {
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#86efac',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  dispatchTxt: { fontSize: 12, color: '#166534', fontWeight: '700' },
-  btnLoading: { opacity: 0.6 },
+    orderCard: {
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      gap: 10,
+    },
+    orderTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+    orderId: { fontSize: 13, fontWeight: '700', color: c.text },
+    orderBuyer: { fontSize: 11, color: c.textMuted, marginTop: 2 },
+    orderTime: { fontSize: 10, color: c.textFaint },
+    orderItems: { gap: 2 },
+    orderItem: { fontSize: 12, color: c.textSub },
+    orderItemMore: { fontSize: 11, color: c.textFaint, fontStyle: 'italic' },
+    orderFooter: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      borderTopWidth: 1,
+      borderTopColor: c.borderLight,
+      paddingTop: 10,
+    },
+    orderAmt: { fontSize: 16, fontWeight: '700', color: c.primary },
+    declineBtn: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+    },
+    declineTxt: { fontSize: 12, color: c.textMuted, fontWeight: '600' },
+    acceptBtn: {
+      backgroundColor: '#2d7a47',
+      borderRadius: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+    },
+    acceptTxt: { fontSize: 12, color: '#fff', fontWeight: '700' },
+    dispatchBtn: {
+      backgroundColor: c.primaryBg,
+      borderWidth: 1,
+      borderColor: c.primaryBorder,
+      borderRadius: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+    },
+    dispatchTxt: { fontSize: 12, color: c.primaryText, fontWeight: '700' },
+    btnLoading: { opacity: 0.6 },
 
-  healthGrid: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  healthCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    gap: 2,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  healthIcon: { fontSize: 18 },
-  healthVal: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  healthLbl: { fontSize: 9, color: '#6b7280', textAlign: 'center' },
+    healthGrid: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+    healthCard: {
+      flex: 1,
+      backgroundColor: c.bg,
+      borderRadius: 12,
+      padding: 12,
+      alignItems: 'center',
+      gap: 2,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    healthIcon: { fontSize: 18 },
+    healthVal: { fontSize: 16, fontWeight: '700', color: c.text },
+    healthLbl: { fontSize: 9, color: c.textMuted, textAlign: 'center' },
 
-  tipCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fffbeb',
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#fde68a',
-  },
-  tipIcon: { fontSize: 22 },
-  tipTitle: { fontSize: 13, fontWeight: '700', color: '#92400e' },
-  tipSub: { fontSize: 11, color: '#78350f', lineHeight: 16, marginTop: 3 },
-});
+    tipCard: {
+      flexDirection: 'row',
+      backgroundColor: c.warningBg,
+      borderRadius: 12,
+      padding: 14,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: c.warningBorder,
+    },
+    tipIcon: { fontSize: 22 },
+    tipTitle: { fontSize: 13, fontWeight: '700', color: c.warningText },
+    tipSub: { fontSize: 11, color: c.warningTextDark, lineHeight: 16, marginTop: 3 },
+  });
+}

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PendingInvite } from '@/services/user-api';
 import { useStore } from '@/context/store-context';
 import { ROLE_CONFIG } from '@/context/store-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
 interface Props {
   visible: boolean;
@@ -14,6 +15,8 @@ interface Props {
 
 export function PendingInviteModal({ visible, onDone }: Props) {
   const { pendingInvites, acceptInvite, declineInvite } = useStore();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [busy, setBusy] = useState<string | null>(null); // invite id being acted on
   const [error, setError] = useState('');
 
@@ -132,78 +135,80 @@ export function PendingInviteModal({ visible, onDone }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f9fafb' },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    safe: { flex: 1, backgroundColor: c.bgScreen },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
-  },
-  logoRing: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#2d7a47', alignItems: 'center', justifyContent: 'center',
-  },
-  logoIcon: { fontSize: 22 },
-  title: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  sub:   { fontSize: 12, color: '#6b7280', marginTop: 1 },
+    header: {
+      flexDirection: 'row', alignItems: 'center', gap: 14,
+      paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20,
+      backgroundColor: c.bg,
+      borderBottomWidth: 1, borderBottomColor: c.border,
+    },
+    logoRing: {
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: '#2d7a47', alignItems: 'center', justifyContent: 'center',
+    },
+    logoIcon: { fontSize: 22 },
+    title: { fontSize: 18, fontWeight: '800', color: c.text },
+    sub:   { fontSize: 12, color: c.textMuted, marginTop: 1 },
 
-  list: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
+    list: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
 
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1, borderColor: '#e5e7eb',
-    overflow: 'hidden',
-  },
-  cardTop: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-  },
-  storeIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#f0fdf4', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#bbf7d0',
-  },
-  storeIconTxt: { fontSize: 20 },
-  storeName:    { fontSize: 15, fontWeight: '700', color: '#111827' },
-  invitedAt:    { fontSize: 11, color: '#9ca3af', marginTop: 2 },
-  rolePill:     { borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
-  rolePillTxt:  { fontSize: 11, fontWeight: '700' },
+    card: {
+      backgroundColor: c.bg,
+      borderRadius: 16,
+      borderWidth: 1, borderColor: c.border,
+      overflow: 'hidden',
+    },
+    cardTop: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      padding: 16, borderBottomWidth: 1, borderBottomColor: c.borderLight,
+    },
+    storeIcon: {
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: c.primaryBg, alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: c.primaryBorder,
+    },
+    storeIconTxt: { fontSize: 20 },
+    storeName:    { fontSize: 15, fontWeight: '700', color: c.text },
+    invitedAt:    { fontSize: 11, color: c.textFaint, marginTop: 2 },
+    rolePill:     { borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
+    rolePillTxt:  { fontSize: 11, fontWeight: '700' },
 
-  roleDesc: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#f9fafb' },
-  roleDescTxt: { fontSize: 12, color: '#6b7280', lineHeight: 17 },
+    roleDesc: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: c.bgScreen },
+    roleDescTxt: { fontSize: 12, color: c.textMuted, lineHeight: 17 },
 
-  cardActions: {
-    flexDirection: 'row', gap: 10,
-    padding: 14, borderTopWidth: 1, borderTopColor: '#f3f4f6',
-  },
-  declineBtn: {
-    flex: 1, paddingVertical: 12, borderRadius: 12,
-    borderWidth: 1.5, borderColor: '#d1d5db', alignItems: 'center',
-  },
-  declineTxt: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  acceptBtn: {
-    flex: 2, paddingVertical: 12, borderRadius: 12,
-    backgroundColor: '#2d7a47', alignItems: 'center',
-  },
-  acceptTxt:   { fontSize: 13, fontWeight: '700', color: '#fff' },
-  btnDisabled: { opacity: 0.5 },
+    cardActions: {
+      flexDirection: 'row', gap: 10,
+      padding: 14, borderTopWidth: 1, borderTopColor: c.borderLight,
+    },
+    declineBtn: {
+      flex: 1, paddingVertical: 12, borderRadius: 12,
+      borderWidth: 1.5, borderColor: c.borderMid, alignItems: 'center',
+    },
+    declineTxt: { fontSize: 13, fontWeight: '600', color: c.textSub },
+    acceptBtn: {
+      flex: 2, paddingVertical: 12, borderRadius: 12,
+      backgroundColor: '#2d7a47', alignItems: 'center',
+    },
+    acceptTxt:   { fontSize: 13, fontWeight: '700', color: '#fff' },
+    btnDisabled: { opacity: 0.5 },
 
-  errorBox: {
-    marginHorizontal: 20, marginBottom: 8,
-    backgroundColor: '#fff5f5', borderRadius: 10, padding: 12,
-    borderWidth: 1, borderColor: '#fca5a5',
-  },
-  errorTxt: { fontSize: 12, color: '#dc2626' },
+    errorBox: {
+      marginHorizontal: 20, marginBottom: 8,
+      backgroundColor: c.errorBg, borderRadius: 10, padding: 12,
+      borderWidth: 1, borderColor: c.errorBorder,
+    },
+    errorTxt: { fontSize: 12, color: c.errorText },
 
-  footer: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8, gap: 8, alignItems: 'center' },
-  skipBtn: {
-    width: '100%', paddingVertical: 13, borderRadius: 14,
-    borderWidth: 1.5, borderColor: '#d1d5db', alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  skipTxt:  { fontSize: 14, fontWeight: '600', color: '#374151' },
-  skipNote: { fontSize: 11, color: '#9ca3af' },
-});
+    footer: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8, gap: 8, alignItems: 'center' },
+    skipBtn: {
+      width: '100%', paddingVertical: 13, borderRadius: 14,
+      borderWidth: 1.5, borderColor: c.borderMid, alignItems: 'center',
+      backgroundColor: c.bg,
+    },
+    skipTxt:  { fontSize: 14, fontWeight: '600', color: c.textSub },
+    skipNote: { fontSize: 11, color: c.textFaint },
+  });
+}

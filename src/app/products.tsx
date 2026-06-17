@@ -11,6 +11,8 @@ import { useToast } from '@/components/toast-provider';
 import { ProductFormModal } from '@/components/product-form-modal';
 import { ProductDetailModal } from '@/components/product-detail-modal';
 import { useStore, ROLE_PERMISSIONS } from '@/context/store-context';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import {
   CatalogProduct, ProductStatus,
   listProducts, updateProduct, deleteProduct,
@@ -26,24 +28,40 @@ function stockLevel(p: CatalogProduct): StockLevel {
   return 'in_stock';
 }
 
-function StockBadge({ level, qty }: { level: StockLevel; qty: number }) {
+// ── Stock badge ────────────────────────────────────────────────────────────────
+
+interface StockBadgeProps {
+  level: StockLevel; qty: number;
+  outLabel: string; lowLabel: string; inLabel: string;
+  c: AppColors;
+}
+function StockBadge({ level, qty, outLabel, lowLabel, inLabel, c }: StockBadgeProps) {
+  const base = { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 } as const;
   if (level === 'out_of_stock')
-    return <View style={sb.base}><Text style={sb.outTxt}>Out of Stock</Text></View>;
+    return <View style={[base, { backgroundColor: c.errorBg }]}><Text style={{ fontSize: 9, fontWeight: '700', color: c.errorTextDark }}>{outLabel}</Text></View>;
   if (level === 'low_stock')
-    return <View style={[sb.base, sb.low]}><Text style={sb.lowTxt}>Low · {qty}</Text></View>;
-  return <View style={[sb.base, sb.in]}><Text style={sb.inTxt}>In Stock · {qty}</Text></View>;
+    return <View style={[base, { backgroundColor: c.warningBg }]}><Text style={{ fontSize: 9, fontWeight: '700', color: c.warningText }}>{lowLabel} · {qty}</Text></View>;
+  return <View style={[base, { backgroundColor: c.primaryBgStrong }]}><Text style={{ fontSize: 9, fontWeight: '700', color: c.primaryText }}>{inLabel} · {qty}</Text></View>;
 }
 
-function StatusBadge({ status }: { status: ProductStatus }) {
+// ── Status badge ───────────────────────────────────────────────────────────────
+
+interface StatusBadgeProps {
+  status: ProductStatus;
+  activeLabel: string; draftLabel: string; archivedLabel: string;
+  c: AppColors;
+}
+function StatusBadge({ status, activeLabel, draftLabel, archivedLabel, c }: StatusBadgeProps) {
+  const base = { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 } as const;
   if (status === 'active')
-    return <View style={[stb.base, stb.active]}><Text style={stb.activeTxt}>Active</Text></View>;
+    return <View style={[base, { backgroundColor: c.primaryBgStrong }]}><Text style={{ fontSize: 9, fontWeight: '700', color: c.primaryText }}>{activeLabel}</Text></View>;
   if (status === 'draft')
-    return <View style={[stb.base, stb.draft]}><Text style={stb.draftTxt}>Draft</Text></View>;
-  return <View style={[stb.base, stb.archived]}><Text style={stb.archivedTxt}>Archived</Text></View>;
+    return <View style={[base, { backgroundColor: c.warningBg }]}><Text style={{ fontSize: 9, fontWeight: '700', color: c.warningText }}>{draftLabel}</Text></View>;
+  return <View style={[base, { backgroundColor: c.bgSubtle }]}><Text style={{ fontSize: 9, fontWeight: '700', color: c.textFaint }}>{archivedLabel}</Text></View>;
 }
 
-const filterTabs = ['All', 'Active', 'Draft', 'Archived', 'Low Stock'] as const;
-type FilterTab = (typeof filterTabs)[number];
+type FilterTabValue = 'All' | 'Active' | 'Draft' | 'Archived' | 'Low Stock';
+const FILTER_TAB_VALUES: FilterTabValue[] = ['All', 'Active', 'Draft', 'Archived', 'Low Stock'];
 
 // ── Bulk Actions Bar ──────────────────────────────────────────────────────────
 
@@ -58,28 +76,31 @@ interface BulkBarProps {
 }
 
 function BulkActionsBar({ count, total, onActivate, onArchive, onDelete, onSelectAll, onClear }: BulkBarProps) {
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const bulk = makeBulkStyles(c);
   return (
     <View style={bulk.bar}>
       <View style={bulk.topRow}>
-        <Text style={bulk.count}>{count} selected</Text>
+        <Text style={bulk.count}>{count} {t('products_selected')}</Text>
         <View style={bulk.topBtns}>
           <Pressable onPress={onSelectAll} style={bulk.topBtn}>
-            <Text style={bulk.topBtnTxt}>Select All ({total})</Text>
+            <Text style={bulk.topBtnTxt}>{t('products_bulk_select_all')} ({total})</Text>
           </Pressable>
           <Pressable onPress={onClear} style={bulk.topBtn}>
-            <Text style={[bulk.topBtnTxt, { color: '#6b7280' }]}>✕ Clear</Text>
+            <Text style={[bulk.topBtnTxt, { color: c.textMuted }]}>{t('products_bulk_clear')}</Text>
           </Pressable>
         </View>
       </View>
       <View style={bulk.actionRow}>
         <Pressable style={[bulk.actionBtn, bulk.activateBtn]} onPress={onActivate}>
-          <Text style={bulk.activateTxt}>● Activate</Text>
+          <Text style={bulk.activateTxt}>{t('products_bulk_activate')}</Text>
         </Pressable>
         <Pressable style={[bulk.actionBtn, bulk.archiveBtn]} onPress={onArchive}>
-          <Text style={bulk.archiveTxt}>Archive</Text>
+          <Text style={[bulk.archiveTxt, { color: c.textSub }]}>{t('products_bulk_archive')}</Text>
         </Pressable>
         <Pressable style={[bulk.actionBtn, bulk.deleteBtn]} onPress={onDelete}>
-          <Text style={bulk.deleteTxt}>🗑️ Delete</Text>
+          <Text style={bulk.deleteTxt}>{t('products_bulk_delete')}</Text>
         </Pressable>
       </View>
     </View>
@@ -93,19 +114,30 @@ export default function ProductsScreen() {
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const { openAdd } = useLocalSearchParams<{ openAdd?: string }>();
   const { showToast, showConfirm } = useToast();
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeScreenStyles(c);
 
   const [switcherOpen, setSwitcherOpen]   = useState(false);
   const [formOpen, setFormOpen]           = useState(false);
   const [editingProduct, setEditingProduct] = useState<CatalogProduct | undefined>();
   const [detailProduct, setDetailProduct] = useState<CatalogProduct | null>(null);
   const [search, setSearch]               = useState('');
-  const [activeFilter, setActiveFilter]   = useState<FilterTab>('All');
+  const [activeFilter, setActiveFilter]   = useState<FilterTabValue>('All');
   const [products, setProducts]           = useState<CatalogProduct[]>([]);
   const [loading, setLoading]             = useState(true);
   const [fetchError, setFetchError]       = useState<string | null>(null);
   const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set());
 
   const isSelecting = selectedIds.size > 0;
+
+  const filterTabLabels: Record<FilterTabValue, string> = {
+    'All':       t('products_filter_all'),
+    'Active':    t('products_filter_active'),
+    'Draft':     t('products_filter_draft'),
+    'Archived':  t('products_filter_archived'),
+    'Low Stock': t('products_filter_low_stock'),
+  };
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -121,8 +153,6 @@ export default function ProductsScreen() {
   }, [activeStore.id]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
-
-  // ── Single-item actions ───────────────────────────────────────────────────
 
   async function toggleListingStatus(product: CatalogProduct) {
     const newStatus: ProductStatus = product.status === 'active' ? 'draft' : 'active';
@@ -156,8 +186,6 @@ export default function ProductsScreen() {
       },
     });
   }
-
-  // ── Bulk actions ──────────────────────────────────────────────────────────
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -222,8 +250,6 @@ export default function ProductsScreen() {
     });
   }
 
-  // ── Modal helpers ─────────────────────────────────────────────────────────
-
   function openAddForm()  { setEditingProduct(undefined); setFormOpen(true); }
   function openEdit(product: CatalogProduct) { setEditingProduct(product); setFormOpen(true); }
   function openDetail(product: CatalogProduct) { setDetailProduct(product); }
@@ -241,8 +267,6 @@ export default function ProductsScreen() {
       return [saved, ...prev];
     });
   }
-
-  // ── Filtering ─────────────────────────────────────────────────────────────
 
   const filtered = products.filter((p) => {
     const matchSearch =
@@ -265,15 +289,14 @@ export default function ProductsScreen() {
     lowStock: products.filter((p) => stockLevel(p) === 'low_stock').length,
   };
 
-  function tabLabel(tab: FilterTab) {
-    if (tab === 'Active'    && counts.active   > 0) return `Active (${counts.active})`;
-    if (tab === 'Draft'     && counts.draft    > 0) return `Draft (${counts.draft})`;
-    if (tab === 'Archived'  && counts.archived > 0) return `Archived (${counts.archived})`;
-    if (tab === 'Low Stock' && counts.lowStock > 0) return `Low Stock (${counts.lowStock})`;
-    return tab;
+  function tabLabel(tab: FilterTabValue) {
+    const base = filterTabLabels[tab];
+    if (tab === 'Active'    && counts.active   > 0) return `${base} (${counts.active})`;
+    if (tab === 'Draft'     && counts.draft    > 0) return `${base} (${counts.draft})`;
+    if (tab === 'Archived'  && counts.archived > 0) return `${base} (${counts.archived})`;
+    if (tab === 'Low Stock' && counts.lowStock > 0) return `${base} (${counts.lowStock})`;
+    return base;
   }
-
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <View style={s.screen}>
@@ -302,24 +325,24 @@ export default function ProductsScreen() {
             <Pressable onPress={() => setSwitcherOpen(true)}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={s.headerTitle}>
-                  {isSelecting ? `${selectedIds.size} selected` : 'My Products'}
+                  {isSelecting ? `${selectedIds.size} ${t('products_selected')}` : t('products_title')}
                 </Text>
                 {!isSelecting && (
                   <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>⌄</Text>
                 )}
               </View>
-              <Text style={s.headerSub}>{activeStore.name} · {products.length} listings</Text>
+              <Text style={s.headerSub}>{activeStore.name} · {products.length} {t('products_listings')}</Text>
             </Pressable>
 
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {isSelecting ? (
                 <Pressable style={s.cancelSelBtn} onPress={clearSelection}>
-                  <Text style={s.cancelSelTxt}>✕ Cancel</Text>
+                  <Text style={s.cancelSelTxt}>{t('products_cancel_sel')}</Text>
                 </Pressable>
               ) : (
                 perms.canEditProducts && (
                   <Pressable style={s.addBtn} onPress={openAddForm}>
-                    <Text style={s.addBtnText}>＋ Add</Text>
+                    <Text style={s.addBtnText}>＋ {t('products_add')}</Text>
                   </Pressable>
                 )
               )}
@@ -331,14 +354,14 @@ export default function ProductsScreen() {
               <Text style={s.searchIcon}>🔍</Text>
               <TextInput
                 style={s.searchInput}
-                placeholder="Search products..."
-                placeholderTextColor="#9ca3af"
+                placeholder={t('products_search_placeholder')}
+                placeholderTextColor={c.textFaint}
                 value={search}
                 onChangeText={setSearch}
               />
               {search.length > 0 && (
                 <Pressable onPress={() => setSearch('')}>
-                  <Text style={{ color: '#9ca3af', fontSize: 16 }}>✕</Text>
+                  <Text style={{ color: c.textFaint, fontSize: 16 }}>✕</Text>
                 </Pressable>
               )}
             </View>
@@ -350,7 +373,7 @@ export default function ProductsScreen() {
       {!isSelecting && (
         <View style={s.filterWrap}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>
-            {filterTabs.map((tab) => (
+            {FILTER_TAB_VALUES.map((tab) => (
               <Pressable
                 key={tab}
                 style={[s.filterTab, activeFilter === tab && s.filterTabActive]}
@@ -367,7 +390,7 @@ export default function ProductsScreen() {
       {/* Selection hint */}
       {isSelecting && (
         <View style={s.selHint}>
-          <Text style={s.selHintTxt}>Tap cards to toggle · Long press to start selection</Text>
+          <Text style={s.selHintTxt}>{t('products_sel_hint')}</Text>
         </View>
       )}
 
@@ -375,15 +398,15 @@ export default function ProductsScreen() {
       {loading ? (
         <View style={s.centeredState}>
           <ActivityIndicator size="large" color="#2d7a47" />
-          <Text style={s.stateText}>Loading products...</Text>
+          <Text style={s.stateText}>{t('products_loading')}</Text>
         </View>
       ) : fetchError ? (
         <View style={s.centeredState}>
           <Text style={{ fontSize: 32 }}>⚠️</Text>
-          <Text style={s.errorTitle}>Could not load products</Text>
+          <Text style={s.errorTitle}>{t('products_cant_load')}</Text>
           <Text style={s.errorSub}>{fetchError}</Text>
           <Pressable style={s.retryBtn} onPress={fetchProducts}>
-            <Text style={s.retryTxt}>Retry</Text>
+            <Text style={s.retryTxt}>{t('products_retry')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -394,12 +417,12 @@ export default function ProductsScreen() {
             <View style={s.emptyState}>
               <Text style={{ fontSize: 40 }}>🌾</Text>
               <Text style={s.emptyTitle}>
-                {products.length === 0 ? 'No products yet' : 'No products found'}
+                {products.length === 0 ? t('products_no_products_yet') : t('products_no_products_found')}
               </Text>
               <Text style={s.emptySub}>
                 {products.length === 0
-                  ? 'Tap "+ Add" to list your first item on HarvestConnect'
-                  : 'Try a different search or filter'}
+                  ? t('products_empty_add_sub')
+                  : t('products_empty_filter_sub')}
               </Text>
             </View>
           ) : (
@@ -454,8 +477,21 @@ export default function ProductsScreen() {
                     <Text style={s.productName} numberOfLines={1}>{product.name}</Text>
 
                     <View style={s.badgeRow}>
-                      <StatusBadge status={product.status} />
-                      <StockBadge level={level} qty={product.stockQuantity} />
+                      <StatusBadge
+                        status={product.status}
+                        activeLabel={t('products_status_active')}
+                        draftLabel={t('products_status_draft')}
+                        archivedLabel={t('products_status_archived')}
+                        c={c}
+                      />
+                      <StockBadge
+                        level={level}
+                        qty={product.stockQuantity}
+                        outLabel={t('products_out_of_stock')}
+                        lowLabel={t('products_low_stock')}
+                        inLabel={t('products_in_stock')}
+                        c={c}
+                      />
                     </View>
 
                     <Text style={s.productCategory}>
@@ -466,7 +502,7 @@ export default function ProductsScreen() {
                       {product.reviewCount > 0 && (
                         <>
                           <Text style={s.productDot}>·</Text>
-                          <Text style={s.productOrders}>{product.reviewCount} reviews</Text>
+                          <Text style={s.productOrders}>{product.reviewCount} {t('products_reviews')}</Text>
                         </>
                       )}
                       {product.rating > 0 && (
@@ -476,7 +512,7 @@ export default function ProductsScreen() {
                         </>
                       )}
                     </View>
-                    <Text style={s.productShips}>🚚 Ships to {product.shipsTo}</Text>
+                    <Text style={s.productShips}>{t('products_ships_to')} {product.shipsTo}</Text>
                   </View>
 
                   {/* Right: toggle + actions (hidden in selection mode) */}
@@ -490,13 +526,17 @@ export default function ProductsScreen() {
                         onPress={() => toggleListingStatus(product)}
                         disabled={product.status === 'archived'}>
                         <Text style={s.statusToggleTxt}>
-                          {product.status === 'active' ? 'Live' : product.status === 'draft' ? 'Draft' : 'Archived'}
+                          {product.status === 'active'
+                            ? t('products_status_active')
+                            : product.status === 'draft'
+                              ? t('products_status_draft')
+                              : t('products_status_archived')}
                         </Text>
                       </Pressable>
 
                       <View style={{ gap: 4, marginTop: 6 }}>
                         <Pressable style={s.editBtn} onPress={() => openEdit(product)}>
-                          <Text style={s.editBtnTxt}>✏️ Edit</Text>
+                          <Text style={s.editBtnTxt}>{t('products_edit')}</Text>
                         </Pressable>
                         <Pressable style={s.deleteBtn} onPress={() => confirmDelete(product)}>
                           <Text style={s.deleteBtnTxt}>🗑️</Text>
@@ -512,10 +552,8 @@ export default function ProductsScreen() {
           {perms.canEditProducts && !isSelecting && (
             <Pressable style={s.addProductCta} onPress={openAddForm}>
               <Text style={{ fontSize: 28 }}>＋</Text>
-              <Text style={s.addProductCtaTitle}>Add a New Product</Text>
-              <Text style={s.addProductCtaSub}>
-                List your farm produce, handmade goods, or local products
-              </Text>
+              <Text style={s.addProductCtaTitle}>{t('products_add_new')}</Text>
+              <Text style={s.addProductCtaSub}>{t('products_add_cta_sub')}</Text>
             </Pressable>
           )}
         </ScrollView>
@@ -537,233 +575,214 @@ export default function ProductsScreen() {
   );
 }
 
-// ── Stock badge styles ─────────────────────────────────────────────────────────
-const sb = StyleSheet.create({
-  base: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: '#fee2e2' },
-  in:   { backgroundColor: '#d1fae5' },
-  low:  { backgroundColor: '#fef3c7' },
-  outTxt: { fontSize: 9, fontWeight: '700', color: '#991b1b' },
-  inTxt:  { fontSize: 9, fontWeight: '700', color: '#166534' },
-  lowTxt: { fontSize: 9, fontWeight: '700', color: '#92400e' },
-});
+function makeBulkStyles(c: AppColors) {
+  return StyleSheet.create({
+    bar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: c.bg,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 20,
+      gap: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 12,
+    },
+    topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    count: { fontSize: 15, fontWeight: '700', color: c.text },
+    topBtns: { flexDirection: 'row', gap: 12 },
+    topBtn: { paddingVertical: 4 },
+    topBtnTxt: { fontSize: 13, fontWeight: '600', color: c.primary },
+    actionRow: { flexDirection: 'row', gap: 10 },
+    actionBtn: {
+      flex: 1,
+      paddingVertical: 11,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    activateBtn: { backgroundColor: '#2d7a47' },
+    archiveBtn:  { backgroundColor: c.bgSubtle, borderWidth: 1, borderColor: c.border },
+    deleteBtn:   { backgroundColor: c.errorBg, borderWidth: 1, borderColor: c.errorBorder },
+    activateTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+    archiveTxt:  { fontSize: 13, fontWeight: '700' },
+    deleteTxt:   { fontSize: 13, fontWeight: '700', color: c.errorText },
+  });
+}
 
-// ── Status badge styles ────────────────────────────────────────────────────────
-const stb = StyleSheet.create({
-  base:     { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
-  active:   { backgroundColor: '#dcfce7' },
-  draft:    { backgroundColor: '#fef3c7' },
-  archived: { backgroundColor: '#f3f4f6' },
-  activeTxt:   { fontSize: 9, fontWeight: '700', color: '#166534' },
-  draftTxt:    { fontSize: 9, fontWeight: '700', color: '#92400e' },
-  archivedTxt: { fontSize: 9, fontWeight: '700', color: '#6b7280' },
-});
+function makeScreenStyles(c: AppColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bgScreen },
 
-// ── Bulk bar styles ────────────────────────────────────────────────────────────
-const bulk = StyleSheet.create({
-  bar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 20,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  count: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  topBtns: { flexDirection: 'row', gap: 12 },
-  topBtn: { paddingVertical: 4 },
-  topBtnTxt: { fontSize: 13, fontWeight: '600', color: '#2d7a47' },
-  actionRow: { flexDirection: 'row', gap: 10 },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  activateBtn: { backgroundColor: '#2d7a47' },
-  archiveBtn:  { backgroundColor: '#f3f4f6', borderWidth: 1, borderColor: '#e5e7eb' },
-  deleteBtn:   { backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' },
-  activateTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
-  archiveTxt:  { fontSize: 13, fontWeight: '700', color: '#374151' },
-  deleteTxt:   { fontSize: 13, fontWeight: '700', color: '#dc2626' },
-});
+    header: {
+      backgroundColor: '#2d7a47',
+      paddingHorizontal: 16,
+      paddingBottom: 18,
+      borderBottomLeftRadius: 20,
+      borderBottomRightRadius: 20,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 14,
+      marginTop: 8,
+    },
+    headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
+    headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+    addBtn: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+    addBtnText: { fontSize: 13, fontWeight: '700', color: '#2d7a47' },
+    cancelSelBtn: {
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.4)',
+    },
+    cancelSelTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      height: 44,
+    },
+    searchIcon: { marginRight: 8, fontSize: 14 },
+    searchInput: { flex: 1, fontSize: 13, color: '#fff' },
 
-// ── Screen styles ──────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f9fafb' },
+    filterWrap: { backgroundColor: c.bg, borderBottomWidth: 1, borderBottomColor: c.border },
+    filters: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+    filterTab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 99, backgroundColor: c.bgSubtle },
+    filterTabActive: { backgroundColor: '#2d7a47' },
+    filterTabTxt: { fontSize: 12, fontWeight: '600', color: c.textMuted },
+    filterTabTxtActive: { color: '#fff' },
 
-  header: {
-    backgroundColor: '#2d7a47',
-    paddingHorizontal: 16,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-    marginTop: 8,
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
-  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  addBtn: { backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
-  addBtnText: { fontSize: 13, fontWeight: '700', color: '#2d7a47' },
-  cancelSelBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  cancelSelTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-  },
-  searchIcon: { marginRight: 8, fontSize: 14 },
-  searchInput: { flex: 1, fontSize: 13, color: '#111827' },
+    selHint: {
+      backgroundColor: c.warningBg,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: c.warningBorder,
+    },
+    selHintTxt: { fontSize: 11, color: c.warningText, textAlign: 'center', fontWeight: '500' },
 
-  filterWrap: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  filters: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  filterTab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 99, backgroundColor: '#f3f4f6' },
-  filterTabActive: { backgroundColor: '#2d7a47' },
-  filterTabTxt: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  filterTabTxtActive: { color: '#fff' },
+    centeredState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 80 },
+    stateText: { fontSize: 14, color: c.textMuted },
+    errorTitle: { fontSize: 16, fontWeight: '600', color: c.text },
+    errorSub: { fontSize: 12, color: c.textMuted, textAlign: 'center', paddingHorizontal: 32 },
+    retryBtn: {
+      marginTop: 4,
+      backgroundColor: '#2d7a47',
+      borderRadius: 8,
+      paddingHorizontal: 24,
+      paddingVertical: 8,
+    },
+    retryTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
-  selHint: {
-    backgroundColor: '#fef3c7',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#fde68a',
-  },
-  selHintTxt: { fontSize: 11, color: '#92400e', textAlign: 'center', fontWeight: '500' },
+    listContent: { padding: 16, gap: 10, paddingBottom: 32 },
 
-  centeredState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 80 },
-  stateText: { fontSize: 14, color: '#6b7280' },
-  errorTitle: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  errorSub: { fontSize: 12, color: '#6b7280', textAlign: 'center', paddingHorizontal: 32 },
-  retryBtn: {
-    marginTop: 4,
-    backgroundColor: '#2d7a47',
-    borderRadius: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-  },
-  retryTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+    emptyState: { alignItems: 'center', paddingVertical: 48, gap: 8 },
+    emptyTitle: { fontSize: 16, fontWeight: '600', color: c.text },
+    emptySub: { fontSize: 13, color: c.textMuted, textAlign: 'center', paddingHorizontal: 24 },
 
-  listContent: { padding: 16, gap: 10, paddingBottom: 32 },
+    productCard: {
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      padding: 12,
+      flexDirection: 'row',
+      gap: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    productCardInactive: { opacity: 0.6 },
+    productCardSelected: { borderColor: '#2d7a47', borderWidth: 2, backgroundColor: c.primaryBg },
 
-  emptyState: { alignItems: 'center', paddingVertical: 48, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  emptySub: { fontSize: 13, color: '#6b7280', textAlign: 'center', paddingHorizontal: 24 },
+    selCircle: {
+      position: 'absolute',
+      top: 10,
+      left: 10,
+      zIndex: 10,
+    },
+    selCircleEmpty: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 2,
+      borderColor: c.borderMid,
+      backgroundColor: c.bg,
+    },
+    selCircleChecked: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: '#2d7a47',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    selCheckTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
 
-  productCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 12,
-    flexDirection: 'row',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  productCardInactive: { opacity: 0.6 },
-  productCardSelected: { borderColor: '#2d7a47', borderWidth: 2, backgroundColor: '#f0fdf4' },
+    productEmoji: {
+      width: 54,
+      height: 54,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    productMid: { flex: 1, gap: 3 },
+    productName: { fontSize: 13, fontWeight: '700', color: c.text },
+    badgeRow: { flexDirection: 'row', gap: 4, flexWrap: 'wrap', marginTop: 2 },
+    productCategory: { fontSize: 11, color: c.textMuted, textTransform: 'capitalize', marginTop: 2 },
+    productMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    productPrice: { fontSize: 13, fontWeight: '700', color: c.primary },
+    productDot: { fontSize: 11, color: c.borderMid },
+    productOrders: { fontSize: 11, color: c.textMuted },
+    productRating: { fontSize: 11, color: '#c97b1a', fontWeight: '600' },
+    productShips: { fontSize: 10, color: c.textFaint, marginTop: 1 },
 
-  selCircle: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 10,
-  },
-  selCircleEmpty: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#d1d5db',
-    backgroundColor: '#fff',
-  },
-  selCircleChecked: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#2d7a47',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selCheckTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
+    productRight: { alignItems: 'center' },
+    statusToggleBtn: {
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      minWidth: 60,
+      alignItems: 'center',
+    },
+    statusToggleBtnActive: { backgroundColor: c.primaryBgStrong },
+    statusToggleBtnDraft:  { backgroundColor: c.warningBg },
+    statusToggleTxt: { fontSize: 10, fontWeight: '700', color: c.textSub },
 
-  productEmoji: {
-    width: 54,
-    height: 54,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  productMid: { flex: 1, gap: 3 },
-  productName: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  badgeRow: { flexDirection: 'row', gap: 4, flexWrap: 'wrap', marginTop: 2 },
-  productCategory: { fontSize: 11, color: '#6b7280', textTransform: 'capitalize', marginTop: 2 },
-  productMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  productPrice: { fontSize: 13, fontWeight: '700', color: '#2d7a47' },
-  productDot: { fontSize: 11, color: '#d1d5db' },
-  productOrders: { fontSize: 11, color: '#6b7280' },
-  productRating: { fontSize: 11, color: '#c97b1a', fontWeight: '600' },
-  productShips: { fontSize: 10, color: '#9ca3af', marginTop: 1 },
+    editBtn: { backgroundColor: c.bgSubtle, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+    editBtnTxt: { fontSize: 11, color: c.textSub, fontWeight: '600' },
+    deleteBtn: {
+      backgroundColor: c.errorBg,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      alignItems: 'center',
+    },
+    deleteBtnTxt: { fontSize: 13 },
 
-  productRight: { alignItems: 'center' },
-  statusToggleBtn: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  statusToggleBtnActive: { backgroundColor: '#d1fae5' },
-  statusToggleBtnDraft:  { backgroundColor: '#fef3c7' },
-  statusToggleTxt: { fontSize: 10, fontWeight: '700', color: '#374151' },
-
-  editBtn: { backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  editBtnTxt: { fontSize: 11, color: '#374151', fontWeight: '600' },
-  deleteBtn: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    alignItems: 'center',
-  },
-  deleteBtnTxt: { fontSize: 13 },
-
-  addProductCta: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 20,
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 2,
-    borderColor: '#d1fae5',
-    borderStyle: 'dashed',
-    marginTop: 4,
-  },
-  addProductCtaTitle: { fontSize: 15, fontWeight: '700', color: '#2d7a47' },
-  addProductCtaSub: { fontSize: 12, color: '#6b7280', textAlign: 'center' },
-});
+    addProductCta: {
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      padding: 20,
+      alignItems: 'center',
+      gap: 6,
+      borderWidth: 2,
+      borderColor: c.primaryBorder,
+      borderStyle: 'dashed',
+      marginTop: 4,
+    },
+    addProductCtaTitle: { fontSize: 15, fontWeight: '700', color: c.primary },
+    addProductCtaSub: { fontSize: 12, color: c.textMuted, textAlign: 'center' },
+  });
+}

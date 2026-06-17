@@ -6,6 +6,7 @@ import { updateMemberRole, removeMember } from '@/services/user-api';
 import type { SellerRole } from '@/services/user-api';
 import type { TeamMember } from '@/context/store-context';
 import { ROLE_CONFIG } from '@/context/store-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
 const ROLE_OPTIONS: { value: Exclude<SellerRole, 'owner'>; label: string; desc: string }[] = [
   { value: 'manager', label: 'Manager', desc: 'Edit products & view analytics' },
@@ -21,6 +22,8 @@ interface Props {
 }
 
 export function MemberActionModal({ visible, member, sellerId, onClose, onUpdated }: Props) {
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [role,        setRole]        = useState<Exclude<SellerRole, 'owner'>>('manager');
   const [saving,      setSaving]      = useState(false);
   const [removing,    setRemoving]    = useState(false);
@@ -187,85 +190,87 @@ export function MemberActionModal({ visible, member, sellerId, onClose, onUpdate
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
-  backdrop:  { backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-  },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'flex-end' },
+    backdrop:  { backgroundColor: 'rgba(0,0,0,0.55)' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      overflow: 'hidden',
+    },
 
-  head: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16,
-    borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-  },
-  memberAvatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center',
-  },
-  memberAvatarTxt: { fontSize: 16, fontWeight: '700', color: '#166534' },
-  memberName:  { fontSize: 15, fontWeight: '700', color: '#111827' },
-  memberPhone: { fontSize: 12, color: '#6b7280', marginTop: 1 },
-  rolePill: { borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
-  rolePillTxt: { fontSize: 11, fontWeight: '700' },
-  closeBtn: {
-    width: 32, height: 32, backgroundColor: '#f3f4f6',
-    borderRadius: 16, alignItems: 'center', justifyContent: 'center',
-  },
-  closeTxt: { fontSize: 13, color: '#374151', fontWeight: '700' },
+    head: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16,
+      borderBottomWidth: 1, borderBottomColor: c.borderLight,
+    },
+    memberAvatar: {
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: c.primaryBgStrong, alignItems: 'center', justifyContent: 'center',
+    },
+    memberAvatarTxt: { fontSize: 16, fontWeight: '700', color: c.primaryText },
+    memberName:  { fontSize: 15, fontWeight: '700', color: c.text },
+    memberPhone: { fontSize: 12, color: c.textMuted, marginTop: 1 },
+    rolePill: { borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 },
+    rolePillTxt: { fontSize: 11, fontWeight: '700' },
+    closeBtn: {
+      width: 32, height: 32, backgroundColor: c.bgSubtle,
+      borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+    },
+    closeTxt: { fontSize: 13, color: c.textSub, fontWeight: '700' },
 
-  body: { padding: 20, gap: 14 },
+    body: { padding: 20, gap: 14 },
 
-  sectionLabel: { fontSize: 12, fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: 0.4 },
+    sectionLabel: { fontSize: 12, fontWeight: '700', color: c.textSub, textTransform: 'uppercase', letterSpacing: 0.4 },
 
-  roleRow: { flexDirection: 'row', gap: 10 },
-  roleChip: {
-    flex: 1, borderWidth: 1.5, borderColor: '#e5e7eb',
-    borderRadius: 12, padding: 12, backgroundColor: '#f9fafb',
-  },
-  roleChipActive: { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  roleLabel: { fontSize: 13, fontWeight: '700', color: '#6b7280' },
-  roleLabelActive: { color: '#166534' },
-  roleDesc: { fontSize: 10, color: '#9ca3af', marginTop: 3, lineHeight: 14 },
-  roleDescActive: { color: '#4ade80' },
+    roleRow: { flexDirection: 'row', gap: 10 },
+    roleChip: {
+      flex: 1, borderWidth: 1.5, borderColor: c.border,
+      borderRadius: 12, padding: 12, backgroundColor: c.bgScreen,
+    },
+    roleChipActive: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    roleLabel: { fontSize: 13, fontWeight: '700', color: c.textMuted },
+    roleLabelActive: { color: c.primaryText },
+    roleDesc: { fontSize: 10, color: c.textFaint, marginTop: 3, lineHeight: 14 },
+    roleDescActive: { color: c.primaryLight },
 
-  ownerNote: { backgroundColor: '#f9fafb', borderRadius: 12, padding: 16 },
-  ownerNoteTxt: { fontSize: 13, color: '#6b7280', lineHeight: 19 },
+    ownerNote: { backgroundColor: c.bgScreen, borderRadius: 12, padding: 16 },
+    ownerNoteTxt: { fontSize: 13, color: c.textMuted, lineHeight: 19 },
 
-  removeBtn: {
-    borderWidth: 1.5, borderColor: '#fca5a5', borderRadius: 12,
-    paddingVertical: 12, alignItems: 'center', backgroundColor: '#fff5f5',
-  },
-  removeTxt: { fontSize: 13, fontWeight: '600', color: '#dc2626' },
+    removeBtn: {
+      borderWidth: 1.5, borderColor: c.errorBorder, borderRadius: 12,
+      paddingVertical: 12, alignItems: 'center', backgroundColor: c.errorBg,
+    },
+    removeTxt: { fontSize: 13, fontWeight: '600', color: c.errorText },
 
-  confirmBox: {
-    backgroundColor: '#fff5f5', borderRadius: 12, padding: 16, gap: 6,
-    borderWidth: 1, borderColor: '#fca5a5',
-  },
-  confirmTitle: { fontSize: 15, fontWeight: '700', color: '#dc2626' },
-  confirmSub:   { fontSize: 13, color: '#6b7280', lineHeight: 18 },
+    confirmBox: {
+      backgroundColor: c.errorBg, borderRadius: 12, padding: 16, gap: 6,
+      borderWidth: 1, borderColor: c.errorBorder,
+    },
+    confirmTitle: { fontSize: 15, fontWeight: '700', color: c.errorText },
+    confirmSub:   { fontSize: 13, color: c.textMuted, lineHeight: 18 },
 
-  errorBox: { backgroundColor: '#fff5f5', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#fca5a5' },
-  errorTxt:  { fontSize: 12, color: '#dc2626' },
+    errorBox: { backgroundColor: c.errorBg, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: c.errorBorder },
+    errorTxt:  { fontSize: 12, color: c.errorText },
 
-  footer: { flexDirection: 'row', gap: 10, paddingBottom: 8 },
-  cancelBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: 12,
-    borderWidth: 1.5, borderColor: '#d1d5db', alignItems: 'center',
-  },
-  cancelTxt: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  saveBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: 12,
-    backgroundColor: '#2d7a47', alignItems: 'center',
-  },
-  saveBtnDisabled: { opacity: 0.45 },
-  saveTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  removeConfirmBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: 12,
-    backgroundColor: '#dc2626', alignItems: 'center',
-  },
-  removeConfirmTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
-});
+    footer: { flexDirection: 'row', gap: 10, paddingBottom: 8 },
+    cancelBtn: {
+      flex: 1, paddingVertical: 13, borderRadius: 12,
+      borderWidth: 1.5, borderColor: c.borderMid, alignItems: 'center',
+    },
+    cancelTxt: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    saveBtn: {
+      flex: 1, paddingVertical: 13, borderRadius: 12,
+      backgroundColor: '#2d7a47', alignItems: 'center',
+    },
+    saveBtnDisabled: { opacity: 0.45 },
+    saveTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    removeConfirmBtn: {
+      flex: 1, paddingVertical: 13, borderRadius: 12,
+      backgroundColor: '#dc2626', alignItems: 'center',
+    },
+    removeConfirmTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  });
+}

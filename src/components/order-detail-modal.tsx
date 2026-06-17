@@ -3,6 +3,8 @@ import {
 } from 'react-native';
 import type { Order, OrderStatus } from '@/services/order-api';
 import { payMethodLabel } from '@/services/order-api';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
 const STATUS_LEVEL: Partial<Record<OrderStatus, number>> = {
   pending_payment: 0, confirmed: 0,
@@ -10,13 +12,6 @@ const STATUS_LEVEL: Partial<Record<OrderStatus, number>> = {
   dispatched: 2, in_transit: 2,
   delivered: 3,
 };
-
-const TIMELINE_STEPS = [
-  { id: 'placed',     label: 'Order Placed', level: 0 },
-  { id: 'accepted',   label: 'Accepted',     level: 1 },
-  { id: 'dispatched', label: 'Dispatched',   level: 2 },
-  { id: 'delivered',  label: 'Delivered',    level: 3 },
-] as const;
 
 interface Props {
   visible: boolean;
@@ -34,6 +29,17 @@ export function OrderDetailModal({
   onAccept, onDecline, onMarkDispatched, onMarkDelivered,
   actionLoading,
 }: Props) {
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
+
+  const TIMELINE_STEPS = [
+    { id: 'placed',     label: t('order_detail_timeline_placed'),     level: 0 },
+    { id: 'accepted',   label: t('order_detail_timeline_accepted'),   level: 1 },
+    { id: 'dispatched', label: t('order_detail_timeline_dispatched'), level: 2 },
+    { id: 'delivered',  label: t('order_detail_timeline_delivered'),  level: 3 },
+  ] as const;
+
   if (!order) return null;
 
   const level = STATUS_LEVEL[order.status] ?? -1;
@@ -48,9 +54,9 @@ export function OrderDetailModal({
   });
 
   const cancelLabel =
-    order.status === 'refund_initiated' ? 'Refund Initiated' :
-    order.status === 'refunded'         ? 'Refunded' :
-    'Cancelled';
+    order.status === 'refund_initiated' ? t('order_detail_refund_init') :
+    order.status === 'refunded'         ? t('order_detail_refunded') :
+    t('order_detail_cancelled');
 
   function handleFooterAction() {
     if (order.status === 'confirmed' || order.status === 'pending_payment') {
@@ -64,11 +70,11 @@ export function OrderDetailModal({
 
   const footerAction =
     order.status === 'confirmed' || order.status === 'pending_payment'
-      ? { label: 'Accept Order ✓', color: '#fff', bg: '#2d7a47' }
+      ? { label: t('orders_accept_order'), color: '#fff', bg: '#2d7a47' }
     : order.status === 'processing'
-      ? { label: 'Mark Dispatched 🚚', color: '#166534', bg: '#f0fdf4', border: '#d1fae5' }
+      ? { label: t('orders_mark_dispatched'), color: c.primaryText, bg: c.primaryBg, border: c.primaryBorder }
     : order.status === 'dispatched' || order.status === 'in_transit'
-      ? { label: 'Mark Delivered ✓', color: '#1e40af', bg: '#eff6ff', border: '#dbeafe' }
+      ? { label: t('orders_mark_delivered'), color: '#1e40af', bg: '#eff6ff', border: '#dbeafe' }
     : null;
 
   return (
@@ -86,7 +92,7 @@ export function OrderDetailModal({
           <View style={s.head}>
             <View>
               <Text style={s.headTitle}>{order.id}</Text>
-              <Text style={s.headSub}>Placed {placedAt}</Text>
+              <Text style={s.headSub}>{t('order_detail_placed')} {placedAt}</Text>
             </View>
             <Pressable style={s.closeBtn} onPress={onClose}>
               <Text style={s.closeTxt}>✕</Text>
@@ -125,7 +131,7 @@ export function OrderDetailModal({
                 <View style={[s.timelineRow, { marginTop: 4 }]}>
                   <View style={s.timelineLeft}>
                     <View style={s.timelineDotCancel}>
-                      <Text style={[s.timelineDotTxt, { color: '#dc2626' }]}>✕</Text>
+                      <Text style={[s.timelineDotTxt, { color: c.errorText }]}>✕</Text>
                     </View>
                   </View>
                   <View style={s.timelineContent}>
@@ -140,7 +146,7 @@ export function OrderDetailModal({
 
             {/* Buyer */}
             <View style={s.section}>
-              <Text style={s.sectionTitle}>BUYER</Text>
+              <Text style={s.sectionTitle}>{t('order_detail_buyer')}</Text>
               <View style={s.buyerCard}>
                 <View style={s.buyerAvatar}>
                   <Text style={{ fontSize: 20 }}>👤</Text>
@@ -153,7 +159,7 @@ export function OrderDetailModal({
                   style={s.callChip}
                   onPress={() => Linking.openURL(`tel:${order.buyerPhone}`)}>
                   <Text style={{ fontSize: 15 }}>📞</Text>
-                  <Text style={s.callChipTxt}>Call</Text>
+                  <Text style={s.callChipTxt}>{t('order_detail_call')}</Text>
                 </Pressable>
               </View>
               <View style={s.addrBox}>
@@ -164,7 +170,7 @@ export function OrderDetailModal({
 
             {/* Items */}
             <View style={s.section}>
-              <Text style={s.sectionTitle}>ITEMS ({order.items.length})</Text>
+              <Text style={s.sectionTitle}>{t('order_detail_items')} ({order.items.length})</Text>
               <View style={s.itemsBox}>
                 {order.items.map((item, i) => (
                   <View key={i} style={[s.itemRow, i > 0 && s.itemRowBorder]}>
@@ -180,30 +186,30 @@ export function OrderDetailModal({
 
             {/* Payment */}
             <View style={s.section}>
-              <Text style={s.sectionTitle}>PAYMENT SUMMARY</Text>
+              <Text style={s.sectionTitle}>{t('order_detail_payment')}</Text>
               <View style={s.summaryBox}>
                 <View style={s.summaryRow}>
-                  <Text style={s.summaryLabel}>Subtotal</Text>
+                  <Text style={s.summaryLabel}>{t('order_detail_subtotal')}</Text>
                   <Text style={s.summaryVal}>₹{Math.round(order.subtotal / 100)}</Text>
                 </View>
                 <View style={s.summaryRow}>
-                  <Text style={s.summaryLabel}>Delivery fee</Text>
+                  <Text style={s.summaryLabel}>{t('order_detail_delivery_fee')}</Text>
                   <Text style={s.summaryVal}>₹{Math.round(order.deliveryFee / 100)}</Text>
                 </View>
                 {order.discount > 0 && (
                   <View style={s.summaryRow}>
-                    <Text style={s.summaryLabel}>Discount</Text>
-                    <Text style={[s.summaryVal, { color: '#16a34a' }]}>
+                    <Text style={s.summaryLabel}>{t('order_detail_discount')}</Text>
+                    <Text style={[s.summaryVal, { color: c.primaryText }]}>
                       –₹{Math.round(order.discount / 100)}
                     </Text>
                   </View>
                 )}
                 <View style={[s.summaryRow, s.summaryTotalRow]}>
-                  <Text style={s.summaryTotalLabel}>Total</Text>
+                  <Text style={s.summaryTotalLabel}>{t('order_detail_total')}</Text>
                   <Text style={s.summaryTotalAmt}>₹{Math.round(order.total / 100)}</Text>
                 </View>
                 <View style={[s.summaryRow, { marginTop: 6 }]}>
-                  <Text style={s.summaryLabel}>Payment</Text>
+                  <Text style={s.summaryLabel}>{t('order_detail_pay_method')}</Text>
                   <Text style={s.summaryVal}>{payMethodLabel(order.paymentMethod)}</Text>
                 </View>
               </View>
@@ -211,11 +217,11 @@ export function OrderDetailModal({
 
             {order.trackingId && (
               <View style={s.section}>
-                <Text style={s.sectionTitle}>TRACKING</Text>
+                <Text style={s.sectionTitle}>{t('order_detail_tracking')}</Text>
                 <View style={s.trackingBox}>
                   <Text style={s.trackingId}>#{order.trackingId}</Text>
                   {order.estimatedDelivery && (
-                    <Text style={s.trackingEta}>Est. delivery: {order.estimatedDelivery}</Text>
+                    <Text style={s.trackingEta}>{t('order_detail_est_delivery')} {order.estimatedDelivery}</Text>
                   )}
                 </View>
               </View>
@@ -232,7 +238,7 @@ export function OrderDetailModal({
                   style={s.declineFooterBtn}
                   onPress={() => { onDecline(order); onClose(); }}
                   disabled={actionLoading}>
-                  <Text style={s.declineFooterTxt}>Decline</Text>
+                  <Text style={s.declineFooterTxt}>{t('order_detail_decline')}</Text>
                 </Pressable>
               )}
               <Pressable
@@ -247,7 +253,7 @@ export function OrderDetailModal({
                 onPress={handleFooterAction}
                 disabled={actionLoading}>
                 <Text style={[s.primaryFooterTxt, { color: footerAction.color }]}>
-                  {actionLoading ? 'Processing...' : footerAction.label}
+                  {actionLoading ? t('order_detail_processing') : footerAction.label}
                 </Text>
               </Pressable>
             </View>
@@ -259,204 +265,206 @@ export function OrderDetailModal({
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '92%',
-    overflow: 'hidden',
-  },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: '92%',
+      overflow: 'hidden',
+    },
 
-  head: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  headTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
-  headSub: { fontSize: 11, color: '#9ca3af', marginTop: 3 },
-  closeBtn: {
-    width: 32, height: 32,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeTxt: { fontSize: 13, color: '#374151', fontWeight: '700' },
+    head: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      paddingHorizontal: 20,
+      paddingTop: 18,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    headTitle: { fontSize: 16, fontWeight: '800', color: c.text },
+    headSub: { fontSize: 11, color: c.textFaint, marginTop: 3 },
+    closeBtn: {
+      width: 32, height: 32,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closeTxt: { fontSize: 13, color: c.textSub, fontWeight: '700' },
 
-  // ── Timeline ──────────────────────────────────────────────────────────────
-  timelineWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: '#f9fafb',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  timelineRow: { flexDirection: 'row', gap: 14 },
-  timelineLeft: { alignItems: 'center', width: 24 },
-  timelineDot: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: '#e5e7eb',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  timelineDotDone: { backgroundColor: '#2d7a47' },
-  timelineDotCancel: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: '#fee2e2',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  timelineDotTxt: { fontSize: 10, fontWeight: '700', color: '#9ca3af' },
-  timelineDotTxtDone: { color: '#fff' },
-  timelineConnector: {
-    flex: 1, width: 2,
-    backgroundColor: '#e5e7eb',
-    marginVertical: 2, minHeight: 18,
-  },
-  timelineConnectorDone: { backgroundColor: '#2d7a47' },
-  timelineContent: { flex: 1, paddingTop: 4, paddingBottom: 16 },
-  timelineLabel: { fontSize: 13, fontWeight: '600', color: '#9ca3af' },
-  timelineLabelDone: { color: '#166534' },
-  timelineCancelLabel: { fontSize: 13, fontWeight: '700', color: '#dc2626', paddingTop: 4 },
-  timelineCancelReason: { fontSize: 12, color: '#9ca3af', fontStyle: 'italic', marginTop: 2 },
+    // ── Timeline ──────────────────────────────────────────────────────────────
+    timelineWrap: {
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 8,
+      backgroundColor: c.bgScreen,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    timelineRow: { flexDirection: 'row', gap: 14 },
+    timelineLeft: { alignItems: 'center', width: 24 },
+    timelineDot: {
+      width: 24, height: 24, borderRadius: 12,
+      backgroundColor: c.bgSubtle,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    timelineDotDone: { backgroundColor: '#2d7a47' },
+    timelineDotCancel: {
+      width: 24, height: 24, borderRadius: 12,
+      backgroundColor: c.errorBg,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    timelineDotTxt: { fontSize: 10, fontWeight: '700', color: c.textFaint },
+    timelineDotTxtDone: { color: '#fff' },
+    timelineConnector: {
+      flex: 1, width: 2,
+      backgroundColor: c.bgSubtle,
+      marginVertical: 2, minHeight: 18,
+    },
+    timelineConnectorDone: { backgroundColor: '#2d7a47' },
+    timelineContent: { flex: 1, paddingTop: 4, paddingBottom: 16 },
+    timelineLabel: { fontSize: 13, fontWeight: '600', color: c.textFaint },
+    timelineLabelDone: { color: c.primaryText },
+    timelineCancelLabel: { fontSize: 13, fontWeight: '700', color: c.errorText, paddingTop: 4 },
+    timelineCancelReason: { fontSize: 12, color: c.textFaint, fontStyle: 'italic', marginTop: 2 },
 
-  // ── Sections ──────────────────────────────────────────────────────────────
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 0,
-  },
-  sectionTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#9ca3af',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
+    // ── Sections ──────────────────────────────────────────────────────────────
+    section: {
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 0,
+    },
+    sectionTitle: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: c.textFaint,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+      marginBottom: 8,
+    },
 
-  // Buyer
-  buyerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  buyerAvatar: {
-    width: 40, height: 40,
-    backgroundColor: '#e5e7eb',
-    borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  buyerName: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  buyerPhone: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  callChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderWidth: 1,
-    borderColor: '#d1fae5',
-  },
-  callChipTxt: { fontSize: 12, fontWeight: '700', color: '#166534' },
-  addrBox: {
-    marginTop: 8,
-    backgroundColor: '#f9fafb',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    gap: 2,
-  },
-  addrLabel: { fontSize: 10, fontWeight: '700', color: '#9ca3af', textTransform: 'uppercase' },
-  addrTxt: { fontSize: 12, color: '#374151', lineHeight: 18 },
+    // Buyer
+    buyerCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: c.bgScreen,
+      borderRadius: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    buyerAvatar: {
+      width: 40, height: 40,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 20,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    buyerName: { fontSize: 14, fontWeight: '700', color: c.text },
+    buyerPhone: { fontSize: 12, color: c.textMuted, marginTop: 2 },
+    callChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: c.primaryBg,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor: c.primaryBorder,
+    },
+    callChipTxt: { fontSize: 12, fontWeight: '700', color: c.primaryText },
+    addrBox: {
+      marginTop: 8,
+      backgroundColor: c.bgScreen,
+      borderRadius: 10,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+      gap: 2,
+    },
+    addrLabel: { fontSize: 10, fontWeight: '700', color: c.textFaint, textTransform: 'uppercase' },
+    addrTxt: { fontSize: 12, color: c.textSub, lineHeight: 18 },
 
-  // Items
-  itemsBox: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    overflow: 'hidden',
-  },
-  itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8 },
-  itemRowBorder: { borderTopWidth: 1, borderTopColor: '#f3f4f6' },
-  itemName: { fontSize: 13, color: '#111827', fontWeight: '600' },
-  itemMeta: { fontSize: 11, color: '#9ca3af', marginTop: 1 },
-  itemPrice: { fontSize: 13, fontWeight: '700', color: '#374151' },
+    // Items
+    itemsBox: {
+      backgroundColor: c.bgScreen,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    itemRow: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8 },
+    itemRowBorder: { borderTopWidth: 1, borderTopColor: c.borderLight },
+    itemName: { fontSize: 13, color: c.text, fontWeight: '600' },
+    itemMeta: { fontSize: 11, color: c.textFaint, marginTop: 1 },
+    itemPrice: { fontSize: 13, fontWeight: '700', color: c.textSub },
 
-  // Payment
-  summaryBox: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    padding: 12,
-    gap: 6,
-  },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryLabel: { fontSize: 12, color: '#6b7280' },
-  summaryVal: { fontSize: 12, fontWeight: '600', color: '#374151' },
-  summaryTotalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 8,
-    marginTop: 2,
-  },
-  summaryTotalLabel: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  summaryTotalAmt: { fontSize: 16, fontWeight: '800', color: '#2d7a47' },
+    // Payment
+    summaryBox: {
+      backgroundColor: c.bgScreen,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 12,
+      gap: 6,
+    },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    summaryLabel: { fontSize: 12, color: c.textMuted },
+    summaryVal: { fontSize: 12, fontWeight: '600', color: c.textSub },
+    summaryTotalRow: {
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      paddingTop: 8,
+      marginTop: 2,
+    },
+    summaryTotalLabel: { fontSize: 14, fontWeight: '700', color: c.text },
+    summaryTotalAmt: { fontSize: 16, fontWeight: '800', color: c.primary },
 
-  // Tracking
-  trackingBox: {
-    backgroundColor: '#eff6ff',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-    gap: 3,
-  },
-  trackingId: { fontSize: 13, fontWeight: '700', color: '#1e40af' },
-  trackingEta: { fontSize: 12, color: '#3b82f6' },
+    // Tracking (fixed blue — represents a shipping status)
+    trackingBox: {
+      backgroundColor: '#eff6ff',
+      borderRadius: 10,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: '#dbeafe',
+      gap: 3,
+    },
+    trackingId: { fontSize: 13, fontWeight: '700', color: '#1e40af' },
+    trackingEta: { fontSize: 12, color: '#3b82f6' },
 
-  // Footer
-  footer: {
-    flexDirection: 'row',
-    gap: 10,
-    padding: 14,
-    paddingBottom: 24,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  declineFooterBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  declineFooterTxt: { fontSize: 13, fontWeight: '600', color: '#6b7280' },
-  primaryFooterBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  primaryFooterDisabled: { opacity: 0.6 },
-  primaryFooterTxt: { fontSize: 14, fontWeight: '700' },
-});
+    // Footer
+    footer: {
+      flexDirection: 'row',
+      gap: 10,
+      padding: 14,
+      paddingBottom: 24,
+      borderTopWidth: 1,
+      borderTopColor: c.borderLight,
+    },
+    declineFooterBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 13,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: c.borderMid,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    declineFooterTxt: { fontSize: 13, fontWeight: '600', color: c.textMuted },
+    primaryFooterBtn: {
+      flex: 1,
+      paddingVertical: 13,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    primaryFooterDisabled: { opacity: 0.6 },
+    primaryFooterTxt: { fontSize: 14, fontWeight: '700' },
+  });
+}

@@ -154,21 +154,37 @@ function SignupScreen({
   onOtpSent,
   onSwitchToLogin,
   onBack,
+  initialPhone,
 }: {
   onOtpSent: (phone: string) => void;
   onSwitchToLogin: (phone: string) => void;
   onBack: () => void;
+  initialPhone?: string;
 }) {
-  const [name,    setName]    = useState('');
-  const [phone,   setPhone]   = useState('');
-  const [email,   setEmail]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const [offline, setOffline] = useState(false);
-  const [duplicate, setDuplicate] = useState(false);
+  const [name,          setName]          = useState('');
+  const [phone,         setPhone]         = useState(initialPhone?.replace('+91', '') ?? '');
+  const [email,         setEmail]         = useState('');
+  const [loading,       setLoading]       = useState(false);
+  const [switchLoading, setSwitchLoading] = useState(false);
+  const [error,         setError]         = useState('');
+  const [offline,       setOffline]       = useState(false);
+  const [duplicate,     setDuplicate]     = useState(false);
 
   const digits    = phone.replace(/\D/g, '');
-  const canSubmit = name.trim().length >= 2 && digits.length === 10 && !loading;
+  const canSubmit = name.trim().length >= 2 && digits.length === 10 && !loading && !switchLoading;
+
+  async function handleSwitchToLogin() {
+    const normalized = normalizePhone(phone);
+    setSwitchLoading(true);
+    try {
+      await requestOtp(normalized);
+    } catch {
+      // Navigate anyway — OTP screen can resend if this failed
+    } finally {
+      setSwitchLoading(false);
+    }
+    onSwitchToLogin(normalized);
+  }
 
   async function handleSignup() {
     if (!canSubmit) return;
@@ -283,8 +299,12 @@ function SignupScreen({
                 {duplicate && (
                   <Pressable
                     style={sg.switchBtn}
-                    onPress={() => onSwitchToLogin(normalizePhone(phone))}>
-                    <Text style={sg.switchBtnTxt}>Log in with this number →</Text>
+                    onPress={handleSwitchToLogin}
+                    disabled={switchLoading}>
+                    <Text style={sg.switchBtnTxt}>
+                      {switchLoading ? 'Sending OTP…' : 'Log in with this number'}
+                    </Text>
+                    {!switchLoading && <View style={sg.switchArrow} />}
                   </Pressable>
                 )}
               </View>
@@ -374,8 +394,9 @@ const sg = StyleSheet.create({
   offlineBox: { backgroundColor: '#fffbeb', borderColor: '#fde68a' },
   errorTxt:   { fontSize: 12, color: '#dc2626', lineHeight: 17 },
   offlineTxt: { color: '#92400e' },
-  switchBtn:  { marginTop: 10, paddingVertical: 8, backgroundColor: '#1a4a28', borderRadius: 8, alignItems: 'center' },
+  switchBtn:    { marginTop: 10, paddingVertical: 8, backgroundColor: '#1a4a28', borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   switchBtnTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  switchArrow:  { width: 0, height: 0, borderTopWidth: 4, borderBottomWidth: 4, borderLeftWidth: 6, borderStyle: 'solid', borderTopColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: '#fff' },
 
   terms:     { marginBottom: 4 },
   termsTxt:  { fontSize: 11, color: '#9ca3af', lineHeight: 16 },
@@ -391,24 +412,29 @@ const sg = StyleSheet.create({
 
 function LoginPhoneScreen({
   onOtpSent,
+  onSwitchToSignup,
   onBack,
 }: {
   onOtpSent: (phone: string) => void;
+  onSwitchToSignup: (phone: string) => void;
   onBack: () => void;
 }) {
-  const [phone,   setPhone]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const [offline, setOffline] = useState(false);
+  const [phone,        setPhone]        = useState('');
+  const [loading,      setLoading]      = useState(false);
+  const [switchLoading, setSwitchLoading] = useState(false);
+  const [error,        setError]        = useState('');
+  const [offline,      setOffline]      = useState(false);
+  const [notFound,     setNotFound]     = useState(false);
 
   const digits    = phone.replace(/\D/g, '');
-  const canSubmit = digits.length === 10 && !loading;
+  const canSubmit = digits.length === 10 && !loading && !switchLoading;
 
   async function handleSend() {
     if (!canSubmit) return;
     setLoading(true);
     setError('');
     setOffline(false);
+    setNotFound(false);
     try {
       const normalized = normalizePhone(phone);
       await requestOtp(normalized);
@@ -417,12 +443,26 @@ function LoginPhoneScreen({
       if (isNetworkError(err)) {
         setOffline(true);
         setError('Cannot reach AuthSvc. Make sure it\'s running on port 3001.');
+      } else if (err instanceof Error && (
+        err.message.toLowerCase().includes('not found') ||
+        err.message.toLowerCase().includes('not registered') ||
+        err.message.toLowerCase().includes('no account')
+      )) {
+        setNotFound(true);
+        setError('No account found for this number.');
       } else {
         setError(err instanceof Error ? err.message : 'Failed to send OTP. Try again.');
       }
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSwitchToSignup() {
+    const normalized = normalizePhone(phone);
+    setSwitchLoading(true);
+    setSwitchLoading(false);
+    onSwitchToSignup(normalized);
   }
 
   return (
@@ -465,6 +505,17 @@ function LoginPhoneScreen({
                 <Text style={[lp.errorTxt, offline && lp.offlineTxt]}>{error}</Text>
                 {offline && __DEV__ && (
                   <Text style={lp.offlineHint}>Go back and use ⚡ Dev Login.</Text>
+                )}
+                {notFound && (
+                  <Pressable
+                    style={lp.switchBtn}
+                    onPress={handleSwitchToSignup}
+                    disabled={switchLoading}>
+                    <Text style={lp.switchBtnTxt}>
+                      {switchLoading ? 'Going to Sign Up…' : 'Create an account'}
+                    </Text>
+                    {!switchLoading && <View style={lp.switchArrow} />}
+                  </Pressable>
                 )}
               </View>
             ) : null}
@@ -539,6 +590,9 @@ const lp = StyleSheet.create({
   errorTxt:    { fontSize: 12, color: '#dc2626', lineHeight: 17 },
   offlineTxt:  { color: '#92400e' },
   offlineHint: { fontSize: 11, color: '#b45309', marginTop: 6 },
+  switchBtn:    { marginTop: 10, paddingVertical: 8, backgroundColor: '#1a4a28', borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  switchBtnTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  switchArrow:  { width: 0, height: 0, borderTopWidth: 4, borderBottomWidth: 4, borderLeftWidth: 6, borderStyle: 'solid', borderTopColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: '#fff' },
   hint:        { fontSize: 11, color: '#9ca3af', lineHeight: 16 },
 
   footer:          { paddingBottom: 12 },
@@ -576,11 +630,6 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
     setError('');
     try {
       const session = await verifyOtp(phone, finalCode);
-      if (session.userType !== 'seller') {
-        setError('This account is not a seller account. Contact HarvestConnect support.');
-        setLoading(false);
-        return;
-      }
       await login(session);
       showToast('Welcome to HarvestConnect!', 'success');
     } catch (err) {
@@ -770,6 +819,7 @@ export function AuthFlow() {
         onOtpSent={(ph) => { setPhone(ph); setScreen('otp'); }}
         onSwitchToLogin={(ph) => { setPhone(ph); setScreen('otp'); }}
         onBack={() => setScreen('welcome')}
+        initialPhone={phone}
       />
     );
   }
@@ -778,10 +828,11 @@ export function AuthFlow() {
     return (
       <LoginPhoneScreen
         onOtpSent={(ph) => { setPhone(ph); setScreen('otp'); }}
+        onSwitchToSignup={(ph) => { setPhone(ph); setScreen('signup'); }}
         onBack={() => setScreen('welcome')}
       />
     );
   }
 
-  return <OtpScreen phone={phone} onBack={() => setScreen(screen === 'otp' ? 'login-phone' : 'login-phone')} />;
+  return <OtpScreen phone={phone} onBack={() => setScreen('login-phone')} />;
 }

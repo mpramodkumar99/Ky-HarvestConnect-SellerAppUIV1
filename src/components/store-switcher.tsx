@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 
 import { useStore, ROLE_CONFIG } from '@/context/store-context';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import { CreateStoreModal } from '@/components/create-store-modal';
 import { useToast } from '@/components/toast-provider';
 
@@ -13,6 +15,9 @@ interface Props {
 export function StoreSwitcher({ visible, onClose }: Props) {
   const { stores, activeStore, setActiveStore, addStore } = useStore();
   const { showToast } = useToast();
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -23,7 +28,7 @@ export function StoreSwitcher({ visible, onClose }: Props) {
         addStore(store);
         setCreateOpen(false);
         onClose();
-        showToast(`${store.name} created! Upload KYC to get verified.`, 'success');
+        showToast(`${store.name} ${t('switcher_created_msg')}`, 'success');
       }}
       onClose={() => setCreateOpen(false)}
     />
@@ -40,8 +45,10 @@ export function StoreSwitcher({ visible, onClose }: Props) {
 
         <View style={s.sheetHead}>
           <View>
-            <Text style={s.title}>Switch Store</Text>
-            <Text style={s.sub}>You are managing {stores.length} stores</Text>
+            <Text style={s.title}>{t('switcher_title')}</Text>
+            <Text style={s.sub}>
+              {t('switcher_managing')} {stores.length} {t('switcher_stores')}
+            </Text>
           </View>
           <Pressable style={s.closeX} onPress={onClose}>
             <Text style={s.closeXTxt}>✕</Text>
@@ -74,25 +81,25 @@ export function StoreSwitcher({ visible, onClose }: Props) {
                     </View>
                     {isActive && (
                       <View style={s.activePill}>
-                        <Text style={s.activePillTxt}>Viewing</Text>
+                        <Text style={s.activePillTxt}>{t('profile_viewing')}</Text>
                       </View>
                     )}
                   </View>
                   <View style={s.statusRow}>
                     <View style={[s.statusPill, store.status === 'live' ? s.statusPillLive : s.statusPillOff]}>
                       <Text style={[s.statusTxt, store.status === 'live' ? s.statusTxtLive : s.statusTxtOff]}>
-                        {store.status === 'live' ? '● Live' : '○ Offline'}
+                        {store.status === 'live' ? t('profile_store_live') : t('profile_store_offline')}
                       </Text>
                     </View>
                     <Text style={s.storeCat}>{store.category}</Text>
                   </View>
                   <Text style={s.storeLoc}>📍 {store.location}</Text>
                   <View style={s.metaRow}>
-                    <Text style={s.metaTxt}>{store.productCount} products</Text>
+                    <Text style={s.metaTxt}>{store.productCount} {t('switcher_products')}</Text>
                     <Text style={s.metaDot}>·</Text>
-                    <Text style={s.metaTxt}>{store.memberCount} members</Text>
+                    <Text style={s.metaTxt}>{store.memberCount} {t('switcher_members')}</Text>
                     <Text style={s.metaDot}>·</Text>
-                    <Text style={s.metaTxt}>{store.ordersToday} orders today</Text>
+                    <Text style={s.metaTxt}>{store.ordersToday} {t('switcher_orders_today')}</Text>
                   </View>
                 </View>
 
@@ -110,8 +117,8 @@ export function StoreSwitcher({ visible, onClose }: Props) {
           <Pressable style={s.newStoreBtn} onPress={() => setCreateOpen(true)}>
             <Text style={s.newStoreIcon}>＋</Text>
             <View>
-              <Text style={s.newStoreTxt}>Create New Store</Text>
-              <Text style={s.newStoreSub}>Set up another storefront on HarvestConnect</Text>
+              <Text style={s.newStoreTxt}>{t('switcher_create_store')}</Text>
+              <Text style={s.newStoreSub}>{t('switcher_create_sub')}</Text>
             </View>
           </Pressable>
         </View>
@@ -122,127 +129,102 @@ export function StoreSwitcher({ visible, onClose }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '80%',
-    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#d1d5db',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  sheetHead: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  sub: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  closeX: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  closeXTxt: { fontSize: 13, color: '#374151', fontWeight: '600' },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: '80%',
+      paddingBottom: Platform.OS === 'ios' ? 32 : 20,
+    },
+    handle: {
+      width: 40, height: 4,
+      backgroundColor: c.borderMid,
+      borderRadius: 2,
+      alignSelf: 'center',
+      marginTop: 10, marginBottom: 6,
+    },
+    sheetHead: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    title: { fontSize: 18, fontWeight: '700', color: c.text },
+    sub: { fontSize: 12, color: c.textMuted, marginTop: 2 },
+    closeX: {
+      width: 32, height: 32,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 16,
+      alignItems: 'center', justifyContent: 'center',
+      marginTop: 2,
+    },
+    closeXTxt: { fontSize: 13, color: c.textSub, fontWeight: '600' },
 
-  list: { paddingHorizontal: 16, paddingTop: 8 },
+    list: { paddingHorizontal: 16, paddingTop: 8 },
 
-  storeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 8,
-    backgroundColor: '#fafafa',
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
-  },
-  storeRowActive: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
-  },
-  storeEmoji: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storeEmojiActive: { backgroundColor: '#dcfce7' },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  storeName: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  storeNameActive: { color: '#166534' },
-  rolePill: {
-    borderRadius: 99,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  roleText: { fontSize: 10, fontWeight: '700' },
-  activePill: {
-    backgroundColor: '#2d7a47',
-    borderRadius: 99,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  activePillTxt: { fontSize: 10, fontWeight: '700', color: '#fff' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statusPill: { borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 },
-  statusPillLive: { backgroundColor: '#dcfce7' },
-  statusPillOff:  { backgroundColor: '#f3f4f6' },
-  statusTxt:     { fontSize: 10, fontWeight: '700' },
-  statusTxtLive: { color: '#166534' },
-  statusTxtOff:  { color: '#6b7280' },
-  storeCat: { fontSize: 11, color: '#6b7280' },
-  storeLoc: { fontSize: 11, color: '#9ca3af' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  metaTxt: { fontSize: 10, color: '#9ca3af' },
-  metaDot: { fontSize: 10, color: '#d1d5db' },
-  checkmark: { fontSize: 20, color: '#2d7a47', fontWeight: '700' },
-  chevron: { fontSize: 20, color: '#d1d5db' },
+    storeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12, padding: 14,
+      borderRadius: 14, marginBottom: 8,
+      backgroundColor: c.bgMuted,
+      borderWidth: 1, borderColor: c.borderLight,
+    },
+    storeRowActive: { backgroundColor: c.primaryBg, borderColor: c.primaryLight },
+    storeEmoji: {
+      width: 52, height: 52,
+      borderRadius: 14,
+      backgroundColor: c.bgSubtle,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    storeEmojiActive: { backgroundColor: c.primaryBgStrong },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    storeName: { fontSize: 14, fontWeight: '700', color: c.text },
+    storeNameActive: { color: c.primaryText },
+    rolePill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
+    roleText: { fontSize: 10, fontWeight: '700' },
+    activePill: {
+      backgroundColor: '#2d7a47',
+      borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2,
+    },
+    activePillTxt: { fontSize: 10, fontWeight: '700', color: '#fff' },
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    statusPill: { borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 },
+    statusPillLive: { backgroundColor: '#dcfce7' },
+    statusPillOff:  { backgroundColor: c.bgSubtle },
+    statusTxt:     { fontSize: 10, fontWeight: '700' },
+    statusTxtLive: { color: '#166534' },
+    statusTxtOff:  { color: c.textMuted },
+    storeCat: { fontSize: 11, color: c.textMuted },
+    storeLoc: { fontSize: 11, color: c.textFaint },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    metaTxt: { fontSize: 10, color: c.textFaint },
+    metaDot: { fontSize: 10, color: c.borderMid },
+    checkmark: { fontSize: 20, color: c.primary, fontWeight: '700' },
+    chevron: { fontSize: 20, color: c.borderMid },
 
-  footer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  newStoreBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#86efac',
-    borderStyle: 'dashed',
-  },
-  newStoreIcon: { fontSize: 28, color: '#2d7a47' },
-  newStoreTxt: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
-  newStoreSub: { fontSize: 11, color: '#4ade80', marginTop: 1 },
-});
+    footer: {
+      paddingHorizontal: 16, paddingTop: 12,
+      borderTopWidth: 1, borderTopColor: c.borderLight,
+    },
+    newStoreBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      backgroundColor: c.primaryBg,
+      borderRadius: 14, padding: 14,
+      borderWidth: 1.5, borderColor: c.primaryLight,
+      borderStyle: 'dashed',
+    },
+    newStoreIcon: { fontSize: 28, color: c.primary },
+    newStoreTxt: { fontSize: 14, fontWeight: '700', color: c.primary },
+    newStoreSub: { fontSize: 11, color: c.primaryLight, marginTop: 1 },
+  });
+}

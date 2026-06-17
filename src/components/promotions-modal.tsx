@@ -4,7 +4,9 @@ import {
   ScrollView, TextInput,
 } from 'react-native';
 import { useToast } from '@/components/toast-provider';
+import { useLanguage } from '@/context/language-context';
 import type { Store } from '@/context/store-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
 type PromoType = 'percent' | 'flat' | 'free_delivery';
 
@@ -18,18 +20,6 @@ interface Promo {
   createdAt: string;
 }
 
-const TYPE_OPTIONS: { value: PromoType; icon: string; label: string }[] = [
-  { value: 'percent',       icon: '🏷️', label: '% Off' },
-  { value: 'flat',          icon: '💸', label: 'Flat ₹ Off' },
-  { value: 'free_delivery', icon: '🚚', label: 'Free Delivery' },
-];
-
-const VALIDITY: { days: number; label: string }[] = [
-  { days: 7,  label: '7 days' },
-  { days: 14, label: '14 days' },
-  { days: 30, label: '1 month' },
-];
-
 interface Props {
   visible: boolean;
   store: Store;
@@ -38,12 +28,27 @@ interface Props {
 
 export function PromotionsModal({ visible, store, onClose }: Props) {
   const { showToast } = useToast();
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [promos,    setPromos]    = useState<Promo[]>([]);
   const [creating,  setCreating]  = useState(false);
   const [promoType, setPromoType] = useState<PromoType>('percent');
   const [value,     setValue]     = useState('');
   const [minOrder,  setMinOrder]  = useState('');
   const [validDays, setValidDays] = useState(7);
+
+  const TYPE_OPTIONS: { value: PromoType; icon: string; label: string }[] = [
+    { value: 'percent',       icon: '🏷️', label: t('promo_type_percent') },
+    { value: 'flat',          icon: '💸', label: t('promo_type_flat') },
+    { value: 'free_delivery', icon: '🚚', label: t('promo_type_free_del') },
+  ];
+
+  const VALIDITY: { days: number; label: string }[] = [
+    { days: 7,  label: `7 ${t('promo_days')}` },
+    { days: 14, label: `14 ${t('promo_days')}` },
+    { days: 30, label: t('promo_1_month') },
+  ];
 
   function resetForm() {
     setCreating(false);
@@ -64,7 +69,7 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
       active: true,
       createdAt: new Date().toISOString(),
     }, ...prev]);
-    showToast('Promotion created!', 'success');
+    showToast(t('promo_created_toast'), 'success');
     resetForm();
   }
 
@@ -74,13 +79,13 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
 
   function deletePromo(id: string) {
     setPromos(prev => prev.filter(p => p.id !== id));
-    showToast('Promotion removed.', 'info');
+    showToast(t('promo_removed_toast'), 'info');
   }
 
   function promoLabel(p: Promo): string {
-    if (p.type === 'percent')       return `${p.value}% Off`;
-    if (p.type === 'flat')          return `₹${p.value} Off`;
-    return 'Free Delivery';
+    if (p.type === 'percent') return `${p.value}% ${t('promo_off')}`;
+    if (p.type === 'flat')    return `₹${p.value} ${t('promo_off')}`;
+    return t('promo_type_free_del');
   }
 
   const canCreate = promoType === 'free_delivery' || value.trim().length > 0;
@@ -98,7 +103,7 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
 
           <View style={s.head}>
             <View>
-              <Text style={s.headTitle}>Promotions & Offers</Text>
+              <Text style={s.headTitle}>{t('promo_title')}</Text>
               <Text style={s.headSub}>{store.name}</Text>
             </View>
             <Pressable style={s.closeBtn} onPress={onClose}>
@@ -110,18 +115,18 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
 
             {creating ? (
               <View style={s.formCard}>
-                <Text style={s.formTitle}>New Promotion</Text>
+                <Text style={s.formTitle}>{t('promo_new_form_title')}</Text>
 
-                <Text style={s.label}>Promotion Type</Text>
+                <Text style={s.label}>{t('promo_type_label')}</Text>
                 <View style={s.typeRow}>
-                  {TYPE_OPTIONS.map((t) => (
+                  {TYPE_OPTIONS.map((opt) => (
                     <Pressable
-                      key={t.value}
-                      style={[s.typeChip, promoType === t.value && s.typeChipActive]}
-                      onPress={() => { setPromoType(t.value); setValue(''); }}>
-                      <Text style={{ fontSize: 18 }}>{t.icon}</Text>
-                      <Text style={[s.typeLabel, promoType === t.value && s.typeLabelActive]}>
-                        {t.label}
+                      key={opt.value}
+                      style={[s.typeChip, promoType === opt.value && s.typeChipActive]}
+                      onPress={() => { setPromoType(opt.value); setValue(''); }}>
+                      <Text style={{ fontSize: 18 }}>{opt.icon}</Text>
+                      <Text style={[s.typeLabel, promoType === opt.value && s.typeLabelActive]}>
+                        {opt.label}
                       </Text>
                     </Pressable>
                   ))}
@@ -130,7 +135,7 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                 {promoType !== 'free_delivery' && (
                   <View style={s.field}>
                     <Text style={s.label}>
-                      {promoType === 'percent' ? 'Discount Percentage *' : 'Discount Amount *'}
+                      {promoType === 'percent' ? t('promo_disc_pct') : t('promo_disc_flat')}
                     </Text>
                     <View style={s.inputRow}>
                       <View style={s.inputPrefix}>
@@ -141,7 +146,7 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                         value={value}
                         onChangeText={setValue}
                         placeholder={promoType === 'percent' ? 'e.g. 10' : 'e.g. 50'}
-                        placeholderTextColor="#9ca3af"
+                        placeholderTextColor={c.textFaint}
                         keyboardType="number-pad"
                       />
                     </View>
@@ -149,7 +154,7 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                 )}
 
                 <View style={s.field}>
-                  <Text style={s.label}>Min. Order Amount (optional)</Text>
+                  <Text style={s.label}>{t('promo_min_order')}</Text>
                   <View style={s.inputRow}>
                     <View style={s.inputPrefix}>
                       <Text style={s.inputPrefixTxt}>₹</Text>
@@ -159,14 +164,14 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                       value={minOrder}
                       onChangeText={setMinOrder}
                       placeholder="e.g. 200"
-                      placeholderTextColor="#9ca3af"
+                      placeholderTextColor={c.textFaint}
                       keyboardType="number-pad"
                     />
                   </View>
                 </View>
 
                 <View style={s.field}>
-                  <Text style={s.label}>Valid For</Text>
+                  <Text style={s.label}>{t('promo_valid_for')}</Text>
                   <View style={s.validRow}>
                     {VALIDITY.map((v) => (
                       <Pressable
@@ -183,13 +188,13 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
 
                 <View style={s.formFooter}>
                   <Pressable style={s.cancelBtn} onPress={resetForm}>
-                    <Text style={s.cancelTxt}>Cancel</Text>
+                    <Text style={s.cancelTxt}>{t('decline_cancel')}</Text>
                   </Pressable>
                   <Pressable
                     style={[s.createBtn, !canCreate && s.createBtnDisabled]}
                     onPress={handleCreate}
                     disabled={!canCreate}>
-                    <Text style={s.createBtnTxt}>Create</Text>
+                    <Text style={s.createBtnTxt}>{t('promo_create')}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -198,18 +203,16 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                 <Pressable style={s.newPromoBtn} onPress={() => setCreating(true)}>
                   <Text style={s.newPromoIcon}>＋</Text>
                   <View>
-                    <Text style={s.newPromoTxt}>Create New Promotion</Text>
-                    <Text style={s.newPromoSub}>Discounts, free delivery, and more</Text>
+                    <Text style={s.newPromoTxt}>{t('promo_new_btn')}</Text>
+                    <Text style={s.newPromoSub}>{t('promo_new_sub')}</Text>
                   </View>
                 </Pressable>
 
                 {promos.length === 0 ? (
                   <View style={s.emptyState}>
                     <Text style={{ fontSize: 48, marginBottom: 12 }}>🎁</Text>
-                    <Text style={s.emptyTitle}>No active promotions</Text>
-                    <Text style={s.emptySub}>
-                      Create a discount or offer to attract more buyers and boost your sales.
-                    </Text>
+                    <Text style={s.emptyTitle}>{t('promo_empty_title')}</Text>
+                    <Text style={s.emptySub}>{t('promo_empty_sub')}</Text>
                   </View>
                 ) : (
                   <View style={s.promoList}>
@@ -218,21 +221,21 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                         <View style={s.promoLeft}>
                           <Text style={s.promoValue}>{promoLabel(promo)}</Text>
                           {promo.minOrder ? (
-                            <Text style={s.promoDet}>Min. order ₹{promo.minOrder}</Text>
+                            <Text style={s.promoDet}>{t('promo_min_order_label')}{promo.minOrder}</Text>
                           ) : null}
                           <Text style={s.promoDet}>
-                            Valid {promo.validDays} days ·{' '}
-                            <Text style={{ color: promo.active ? '#2d7a47' : '#9ca3af' }}>
-                              {promo.active ? 'Active' : 'Paused'}
+                            {t('promo_valid_pre')} {promo.validDays} {t('promo_days')} ·{' '}
+                            <Text style={{ color: promo.active ? '#2d7a47' : c.textFaint }}>
+                              {promo.active ? t('promo_active') : t('promo_paused')}
                             </Text>
                           </Text>
                         </View>
                         <View style={s.promoActions}>
                           <Pressable style={s.promoBtn} onPress={() => togglePromo(promo.id)}>
-                            <Text style={s.promoBtnTxt}>{promo.active ? 'Pause' : 'Resume'}</Text>
+                            <Text style={s.promoBtnTxt}>{promo.active ? t('promo_pause') : t('promo_resume')}</Text>
                           </Pressable>
                           <Pressable style={[s.promoBtn, s.promoDeleteBtn]} onPress={() => deletePromo(promo.id)}>
-                            <Text style={[s.promoBtnTxt, { color: '#dc2626' }]}>Delete</Text>
+                            <Text style={[s.promoBtnTxt, { color: '#dc2626' }]}>{t('promo_delete')}</Text>
                           </Pressable>
                         </View>
                       </View>
@@ -242,9 +245,7 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
 
                 <View style={s.syncNote}>
                   <Text style={{ fontSize: 14 }}>ℹ️</Text>
-                  <Text style={s.syncNoteTxt}>
-                    Promotions are session-only for now. Persistent management will be available once the promotions service is live.
-                  </Text>
+                  <Text style={s.syncNoteTxt}>{t('promo_sync_note')}</Text>
                 </View>
               </>
             )}
@@ -256,181 +257,183 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-    maxHeight: '92%',
-  },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      overflow: 'hidden',
+      maxHeight: '92%',
+    },
 
-  head: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  headTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  headSub: { fontSize: 11, color: '#6b7280', marginTop: 2 },
-  closeBtn: {
-    width: 32, height: 32,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeTxt: { fontSize: 13, color: '#374151', fontWeight: '700' },
+    head: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    headTitle: { fontSize: 17, fontWeight: '700', color: c.text },
+    headSub: { fontSize: 11, color: c.textMuted, marginTop: 2 },
+    closeBtn: {
+      width: 32, height: 32,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 16,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    closeTxt: { fontSize: 13, color: c.textSub, fontWeight: '700' },
 
-  body: { padding: 16 },
+    body: { padding: 16 },
 
-  // Create form
-  formCard: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    marginBottom: 16,
-  },
-  formTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 16 },
-  label: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  field: { marginBottom: 16 },
+    // Create form
+    formCard: {
+      backgroundColor: c.bgScreen,
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 16,
+    },
+    formTitle: { fontSize: 15, fontWeight: '700', color: c.text, marginBottom: 16 },
+    label: { fontSize: 12, fontWeight: '600', color: c.textSub, marginBottom: 6 },
+    field: { marginBottom: 16 },
 
-  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  typeChip: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#fff',
-  },
-  typeChipActive: { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  typeLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280' },
-  typeLabelActive: { color: '#166534' },
+    typeRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+    typeChip: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 4,
+      paddingVertical: 10,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bg,
+    },
+    typeChipActive: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    typeLabel: { fontSize: 11, fontWeight: '600', color: c.textMuted },
+    typeLabelActive: { color: c.primaryText },
 
-  inputRow: { flexDirection: 'row' },
-  inputPrefix: {
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRightWidth: 0,
-    borderTopLeftRadius: 10,
-    borderBottomLeftRadius: 10,
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-  },
-  inputPrefixTxt: { fontSize: 14, fontWeight: '700', color: '#374151' },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#fff',
-  },
+    inputRow: { flexDirection: 'row' },
+    inputPrefix: {
+      borderWidth: 1.5,
+      borderColor: c.border,
+      borderRightWidth: 0,
+      borderTopLeftRadius: 10,
+      borderBottomLeftRadius: 10,
+      backgroundColor: c.bgSubtle,
+      paddingHorizontal: 12,
+      justifyContent: 'center',
+    },
+    inputPrefixTxt: { fontSize: 14, fontWeight: '700', color: c.textSub },
+    input: {
+      borderWidth: 1.5,
+      borderColor: c.border,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      fontSize: 14,
+      color: c.text,
+      backgroundColor: c.bg,
+    },
 
-  validRow: { flexDirection: 'row', gap: 8 },
-  validChip: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  validChipActive: { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  validLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  validLabelActive: { color: '#166534' },
+    validRow: { flexDirection: 'row', gap: 8 },
+    validChip: {
+      flex: 1,
+      paddingVertical: 9,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      alignItems: 'center',
+      backgroundColor: c.bg,
+    },
+    validChipActive: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    validLabel: { fontSize: 12, fontWeight: '600', color: c.textMuted },
+    validLabelActive: { color: c.primaryText },
 
-  formFooter: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-  },
-  cancelTxt: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  createBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#2d7a47',
-    alignItems: 'center',
-  },
-  createBtnDisabled: { opacity: 0.4 },
-  createBtnTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
+    formFooter: { flexDirection: 'row', gap: 10, marginTop: 4 },
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: c.borderMid,
+      alignItems: 'center',
+    },
+    cancelTxt: { fontSize: 13, fontWeight: '600', color: c.textSub },
+    createBtn: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: '#2d7a47',
+      alignItems: 'center',
+    },
+    createBtnDisabled: { opacity: 0.4 },
+    createBtnTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
-  // New promo button
-  newPromoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#86efac',
-    borderStyle: 'dashed',
-    marginBottom: 16,
-  },
-  newPromoIcon: { fontSize: 26, color: '#2d7a47' },
-  newPromoTxt: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
-  newPromoSub: { fontSize: 11, color: '#4ade80', marginTop: 1 },
+    // New promo button
+    newPromoBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      backgroundColor: c.primaryBg,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1.5,
+      borderColor: c.primaryBorder,
+      borderStyle: 'dashed',
+      marginBottom: 16,
+    },
+    newPromoIcon: { fontSize: 26, color: '#2d7a47' },
+    newPromoTxt: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
+    newPromoSub: { fontSize: 11, color: c.primaryLight, marginTop: 1 },
 
-  // Empty state
-  emptyState: { alignItems: 'center', paddingVertical: 32 },
-  emptyTitle: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 8 },
-  emptySub: { fontSize: 12, color: '#9ca3af', textAlign: 'center', lineHeight: 18, paddingHorizontal: 24 },
+    // Empty state
+    emptyState: { alignItems: 'center', paddingVertical: 32 },
+    emptyTitle: { fontSize: 15, fontWeight: '700', color: c.textSub, marginBottom: 8 },
+    emptySub: { fontSize: 12, color: c.textFaint, textAlign: 'center', lineHeight: 18, paddingHorizontal: 24 },
 
-  // Promo list
-  promoList: { gap: 10, marginBottom: 16 },
-  promoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  promoCardPaused: { opacity: 0.55 },
-  promoLeft: { flex: 1, gap: 3 },
-  promoValue: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  promoDet: { fontSize: 11, color: '#6b7280' },
-  promoActions: { gap: 6 },
-  promoBtn: {
-    borderRadius: 7,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
-  },
-  promoDeleteBtn: { borderColor: '#fca5a5' },
-  promoBtnTxt: { fontSize: 11, fontWeight: '600', color: '#374151' },
+    // Promo list
+    promoList: { gap: 10, marginBottom: 16 },
+    promoCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: c.bg,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    promoCardPaused: { opacity: 0.55 },
+    promoLeft: { flex: 1, gap: 3 },
+    promoValue: { fontSize: 16, fontWeight: '700', color: c.text },
+    promoDet: { fontSize: 11, color: c.textMuted },
+    promoActions: { gap: 6 },
+    promoBtn: {
+      borderRadius: 7,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+    },
+    promoDeleteBtn: { borderColor: '#fca5a5' },
+    promoBtnTxt: { fontSize: 11, fontWeight: '600', color: c.textSub },
 
-  syncNote: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#f9fafb',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 24,
-    alignItems: 'flex-start',
-  },
-  syncNoteTxt: { flex: 1, fontSize: 11, color: '#6b7280', lineHeight: 16 },
-});
+    syncNote: {
+      flexDirection: 'row',
+      gap: 8,
+      backgroundColor: c.bgScreen,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 24,
+      alignItems: 'flex-start',
+    },
+    syncNoteTxt: { flex: 1, fontSize: 11, color: c.textMuted, lineHeight: 16 },
+  });
+}

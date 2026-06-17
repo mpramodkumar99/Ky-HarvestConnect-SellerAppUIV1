@@ -3,7 +3,10 @@ import {
   Modal, View, Text, TextInput, Pressable, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import type { BankAccount, CreateBankAccountInput } from '@/services/user-api';
+import { lookupIFSC, IFSC_REGEX, type IFSCInfo } from '@/utils/ifsc';
 
 interface Props {
   visible: boolean;
@@ -13,6 +16,9 @@ interface Props {
 }
 
 export function BankAccountModal({ visible, existing, onSave, onClose }: Props) {
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [holderName, setHolderName]     = useState('');
   const [accountNo,  setAccountNo]      = useState('');
   const [ifsc,       setIfsc]           = useState('');
@@ -21,12 +27,17 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
   const [saving,     setSaving]         = useState(false);
   const [error,      setError]          = useState('');
 
-  // Pre-fill from existing data when modal opens; always clear account number (security)
+  const [ifscInfo,      setIfscInfo]      = useState<IFSCInfo | null>(null);
+  const [ifscLookingUp, setIfscLookingUp] = useState(false);
+  const [ifscNotFound,  setIfscNotFound]  = useState(false);
+  // track whether bankName was auto-filled so we can replace it on IFSC change
+  const [bankNameAutoFilled, setBankNameAutoFilled] = useState(false);
+
   useEffect(() => {
     if (!visible) return;
     if (existing) {
       setHolderName(existing.accountHolderName);
-      setAccountNo('');   // force re-entry — we only have the masked version
+      setAccountNo('');
       setIfsc(existing.ifscCode);
       setBankName(existing.bankName);
       setUpiId(existing.upiId ?? '');
@@ -37,15 +48,48 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
       setBankName('');
       setUpiId('');
     }
+    setIfscInfo(null);
+    setIfscNotFound(false);
+    setBankNameAutoFilled(false);
     setError('');
   }, [visible, existing]);
 
+  // IFSC lookup — fires when 11-char valid-format code is entered
+  useEffect(() => {
+    const code = ifsc.toUpperCase().trim();
+    if (!IFSC_REGEX.test(code)) {
+      setIfscInfo(null);
+      setIfscNotFound(false);
+      return;
+    }
+    let cancelled = false;
+    setIfscLookingUp(true);
+    setIfscInfo(null);
+    setIfscNotFound(false);
+    lookupIFSC(code).then(info => {
+      if (cancelled) return;
+      setIfscLookingUp(false);
+      if (info) {
+        setIfscInfo(info);
+        setIfscNotFound(false);
+        if (!bankName.trim() || bankNameAutoFilled) {
+          setBankName(info.bank);
+          setBankNameAutoFilled(true);
+        }
+      } else {
+        setIfscInfo(null);
+        setIfscNotFound(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [ifsc]);
+
   async function handleSave() {
     setError('');
-    if (!holderName.trim())                       { setError('Account holder name is required'); return; }
-    if (!/^\d{9,18}$/.test(accountNo))            { setError('Account number must be 9–18 digits (numbers only)'); return; }
-    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.toUpperCase())) { setError('Invalid IFSC code  (e.g. HDFC0001234)'); return; }
-    if (!bankName.trim())                         { setError('Bank name is required'); return; }
+    if (!holderName.trim())                            { setError(t('bank_err_holder')); return; }
+    if (!/^\d{9,18}$/.test(accountNo))                { setError(t('bank_err_account')); return; }
+    if (!IFSC_REGEX.test(ifsc.toUpperCase()))          { setError(t('bank_err_ifsc')); return; }
+    if (!bankName.trim())                              { setError(t('bank_err_bank_name')); return; }
 
     setSaving(true);
     try {
@@ -58,7 +102,7 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
       });
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save. Please try again.');
+      setError(e instanceof Error ? e.message : t('bank_err_save'));
     } finally {
       setSaving(false);
     }
@@ -72,15 +116,15 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={s.sheet}>
           <View style={s.handle} />
-          <Text style={s.title}>{existing ? 'Update Bank Account' : 'Add Bank Account'}</Text>
-          <Text style={s.subtitle}>Payouts are settled T+1 to this account</Text>
+          <Text style={s.title}>{existing ? t('bank_title_update') : t('bank_title_add')}</Text>
+          <Text style={s.subtitle}>{t('bank_subtitle')}</Text>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Field label="Account Holder Name" required>
+            <Field label={t('bank_holder_name')} required c={c}>
               <TextInput
                 style={s.input}
-                placeholder="As per bank records"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('bank_holder_name_ph')}
+                placeholderTextColor={c.textFaint}
                 value={holderName}
                 onChangeText={setHolderName}
                 autoCapitalize="words"
@@ -88,13 +132,14 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
             </Field>
 
             <Field
-              label="Account Number"
+              label={t('bank_account_no')}
               required
-              hint={existing ? `Current: ${existing.accountNumber} — re-enter to change` : undefined}>
+              hint={existing ? `Current: ${existing.accountNumber} — ${t('bank_account_reenter')}` : undefined}
+              c={c}>
               <TextInput
                 style={s.input}
-                placeholder="Enter full account number"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('bank_account_no_ph')}
+                placeholderTextColor={c.textFaint}
                 value={accountNo}
                 onChangeText={setAccountNo}
                 keyboardType="number-pad"
@@ -102,34 +147,58 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
               />
             </Field>
 
-            <Field label="IFSC Code" required>
+            <Field label={t('bank_ifsc')} required c={c}>
               <TextInput
-                style={[s.input, s.monoInput]}
-                placeholder="e.g. HDFC0001234"
-                placeholderTextColor="#9ca3af"
+                style={[s.input, s.monoInput, ifscNotFound && s.inputError, ifscInfo && s.inputValid]}
+                placeholder={t('bank_ifsc_ph')}
+                placeholderTextColor={c.textFaint}
                 value={ifsc}
-                onChangeText={t => setIfsc(t.toUpperCase())}
+                onChangeText={v => {
+                  setIfsc(v.toUpperCase());
+                  setBankNameAutoFilled(false);
+                }}
                 autoCapitalize="characters"
                 maxLength={11}
               />
+              {ifscLookingUp && (
+                <View style={s.ifscStatus}>
+                  <ActivityIndicator size="small" color={c.primary} />
+                  <Text style={[s.ifscStatusTxt, { color: c.textFaint }]}>Looking up branch…</Text>
+                </View>
+              )}
+              {ifscInfo && !ifscLookingUp && (
+                <View style={s.ifscStatus}>
+                  <Text style={s.ifscStatusIcon}>✓</Text>
+                  <Text style={[s.ifscStatusTxt, { color: c.primaryText }]} numberOfLines={2}>
+                    {ifscInfo.bank} · {ifscInfo.branch}
+                    {ifscInfo.city ? `, ${ifscInfo.city}` : ''}
+                  </Text>
+                </View>
+              )}
+              {ifscNotFound && !ifscLookingUp && (
+                <View style={s.ifscStatus}>
+                  <Text style={s.ifscStatusIcon}>✕</Text>
+                  <Text style={[s.ifscStatusTxt, { color: c.errorText }]}>Invalid IFSC code — bank not found</Text>
+                </View>
+              )}
             </Field>
 
-            <Field label="Bank Name" required>
+            <Field label={t('bank_name')} required c={c}>
               <TextInput
                 style={s.input}
-                placeholder="e.g. HDFC Bank"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('bank_name_ph')}
+                placeholderTextColor={c.textFaint}
                 value={bankName}
-                onChangeText={setBankName}
+                onChangeText={v => { setBankName(v); setBankNameAutoFilled(false); }}
                 autoCapitalize="words"
               />
             </Field>
 
-            <Field label="UPI ID" hint="Optional — for faster settlements">
+            <Field label={t('bank_upi')} hint={t('bank_upi_hint')} c={c}>
               <TextInput
                 style={s.input}
-                placeholder="e.g. name@hdfcbank"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('bank_upi_ph')}
+                placeholderTextColor={c.textFaint}
                 value={upiId}
                 onChangeText={setUpiId}
                 autoCapitalize="none"
@@ -149,7 +218,7 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
               disabled={saving}>
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={s.saveBtnTxt}>{existing ? 'Update Account' : 'Save Account'}</Text>
+                : <Text style={s.saveBtnTxt}>{existing ? t('bank_update_btn') : t('bank_save_btn')}</Text>
               }
             </Pressable>
 
@@ -164,102 +233,111 @@ export function BankAccountModal({ visible, existing, onSave, onClose }: Props) 
 // ── Field wrapper ─────────────────────────────────────────────────────────────
 
 function Field({
-  label, required, hint, children,
+  label, required, hint, children, c,
 }: {
   label: string;
   required?: boolean;
   hint?: string;
   children: React.ReactNode;
+  c: AppColors;
 }) {
   return (
-    <View style={s.field}>
+    <View style={{ marginBottom: 16 }}>
       <View style={{ flexDirection: 'row', gap: 4, marginBottom: 6 }}>
-        <Text style={s.fieldLabel}>{label}</Text>
-        {required && <Text style={s.required}>*</Text>}
+        <Text style={{ fontSize: 13, fontWeight: '600', color: c.textSub }}>{label}</Text>
+        {required && <Text style={{ fontSize: 13, color: '#ef4444', fontWeight: '700' }}>*</Text>}
       </View>
       {children}
-      {hint ? <Text style={s.fieldHint}>{hint}</Text> : null}
+      {hint ? <Text style={{ fontSize: 11, color: c.textFaint, marginTop: 4 }}>{hint}</Text> : null}
     </View>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    maxHeight: '90%',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#d1d5db',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 20,
-  },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      maxHeight: '90%',
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    handle: {
+      width: 40,
+      height: 4,
+      backgroundColor: c.borderMid,
+      borderRadius: 2,
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: c.text,
+      marginBottom: 4,
+    },
+    subtitle: {
+      fontSize: 12,
+      color: c.textMuted,
+      marginBottom: 20,
+    },
 
-  field: { marginBottom: 16 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  required: { fontSize: 13, color: '#ef4444', fontWeight: '700' },
-  fieldHint: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+    input: {
+      height: 46,
+      borderWidth: 1,
+      borderColor: c.borderMid,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      fontSize: 14,
+      color: c.text,
+      backgroundColor: c.bgScreen,
+    },
+    monoInput: {
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      letterSpacing: 1,
+    },
+    inputError: { borderColor: '#ef4444', backgroundColor: '#fef2f2' },
+    inputValid: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
 
-  input: {
-    height: 46,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#f9fafb',
-  },
-  monoInput: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    letterSpacing: 1,
-  },
+    ifscStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 6,
+    },
+    ifscStatusIcon: { fontSize: 13, fontWeight: '700' },
+    ifscStatusTxt:  { fontSize: 12, flex: 1, lineHeight: 17 },
 
-  errorBox: {
-    backgroundColor: '#fef2f2',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    padding: 10,
-    marginBottom: 12,
-  },
-  errorText: { fontSize: 13, color: '#991b1b' },
+    errorBox: {
+      backgroundColor: c.errorBg,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.errorBorder,
+      padding: 10,
+      marginBottom: 12,
+    },
+    errorText: { fontSize: 13, color: c.errorTextDark },
 
-  saveBtn: {
-    backgroundColor: '#2d7a47',
-    borderRadius: 12,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
-});
+    saveBtn: {
+      backgroundColor: '#2d7a47',
+      borderRadius: 12,
+      height: 50,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 4,
+    },
+    saveBtnDisabled: { opacity: 0.6 },
+    saveBtnTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  });
+}

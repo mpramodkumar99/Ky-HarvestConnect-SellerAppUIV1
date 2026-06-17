@@ -19,6 +19,7 @@ export interface User {
   name: string;
   phone: string;       // E.164 format: +919876543210
   email?: string;
+  imageUrl?: string;
   type: UserType;
   verified: boolean;
   createdAt: string;
@@ -42,6 +43,28 @@ export interface Address {
   updatedAt: string;
 }
 
+export interface SocialHandles {
+  instagram?: string;
+  facebook?:  string;
+  whatsapp?:  string;
+  website?:   string;
+  youtube?:   string;
+}
+
+export interface ResolvedPin {
+  pin:      string;
+  name:     string;
+  district: string;
+}
+
+export interface CustomDeliveryZone {
+  states:       string[];
+  districts:    string[];
+  mandals:      string[];
+  pinCodes:     string;
+  resolvedPins: ResolvedPin[];
+}
+
 export interface Seller {
   id: string;
   userId?: string;
@@ -51,12 +74,17 @@ export interface Seller {
   email?: string;
   description?: string;
   imageUrl?: string;
+  bannerUrl?: string;
   location: string;
+  address?: string;
   pincode: string;
   lat: number;
   lng: number;
   deliveryZones: ShipsTo[];
   fssaiNumber?: string;
+  gstNumber?: string;
+  socialHandles?: SocialHandles;
+  customDeliveryZone?: CustomDeliveryZone;
   verified: boolean;
   verifiedAt?: string;
   documentUrls: string[];
@@ -72,6 +100,7 @@ export interface SellerMember {
   phone: string;
   role: SellerRole;
   status: MemberStatus;
+  imageUrl?: string;
   invitedAt: string;
   joinedAt?: string;
 }

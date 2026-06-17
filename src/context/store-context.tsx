@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { SellerType, ShipsTo, SellerRole, MemberStatus, Seller, PendingInvite } from '@/services/user-api';
+import type { SellerType, ShipsTo, SellerRole, MemberStatus, Seller, SocialHandles, CustomDeliveryZone, PendingInvite } from '@/services/user-api';
 import { getSeller, listMembers, getSellersByUser, getUser, getPendingInvites, activateMember, removeMember } from '@/services/user-api';
 import { useAuth } from '@/context/auth-context';
 
@@ -15,13 +15,18 @@ export interface Store {
   category: string;       // human-readable label for UI display
   icon: string;
   description?: string;   // store bio shown in Store Settings
-  imageUrl?: string;      // store logo / photo URL
+  imageUrl?: string;      // store profile icon URL
+  bannerUrl?: string;     // wide banner shown behind store header
   location: string;
   phone: string;
   pincode: string;
   deliveryZones: ShipsTo[]; // seller-level delivery coverage
+  customDeliveryZone?: CustomDeliveryZone;
   verified: boolean;
   fssaiNumber?: string;
+  gstNumber?: string;
+  address?: string;
+  socialHandles?: SocialHandles;
   status: 'live' | 'offline';  // store operational status — client-side only
   role: SellerRole;       // this user's role within the seller account
   memberCount: number;
@@ -40,6 +45,7 @@ export interface TeamMember {
   role: SellerRole;
   status: MemberStatus;
   avatar: string;         // UI-only: initials, e.g. 'SR'
+  imageUrl?: string;      // user profile photo, enriched from UserSvc
   invitedAt: string;
   joinedAt?: string;
 }
@@ -49,6 +55,7 @@ interface StoreContextValue {
   activeStore: Store;
   teamMembers: TeamMember[];     // live members for the active store only
   loadingStores: boolean;
+  storesInitialized: boolean;    // true once the first fetch for this session has resolved
   loadingTeam: boolean;
   newOrderCount: number;         // live count of 'new' orders — drives tab badge
   setNewOrderCount: (n: number) => void;
@@ -82,16 +89,19 @@ function initials(name: string): string {
 function mergeLiveSeller(seed: Store, live: Awaited<ReturnType<typeof getSeller>>): Store {
   return {
     ...seed,
-    name:          live.name,
-    type:          live.type,
-    phone:         live.phone,
-    location:      live.location,
-    pincode:       live.pincode,
-    deliveryZones: live.deliveryZones,
-    description:   live.description,
-    imageUrl:      live.imageUrl,
-    verified:      live.verified,
-    fssaiNumber:   live.fssaiNumber,
+    name:               live.name,
+    type:               live.type,
+    phone:              live.phone,
+    location:           live.location,
+    pincode:            live.pincode,
+    deliveryZones:      live.deliveryZones,
+    customDeliveryZone: live.customDeliveryZone,
+    description:        live.description,
+    imageUrl:           live.imageUrl,
+    bannerUrl:          live.bannerUrl,
+    verified:           live.verified,
+    fssaiNumber:        live.fssaiNumber,
+    gstNumber:          live.gstNumber,
   };
 }
 
@@ -103,13 +113,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const userId = session?.userId ?? null;
 
-  const [storeList, setStoreList]           = useState<Store[]>([]);
-  const [activeStoreId, setActiveStoreId]   = useState<string>('');
-  const [teamMembers, setTeamMembers]       = useState<TeamMember[]>([]);
-  const [loadingStores, setLoadingStores]   = useState(false);
-  const [loadingTeam, setLoadingTeam]       = useState(false);
-  const [newOrderCount, setNewOrderCount]   = useState(0);
-  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [storeList, setStoreList]               = useState<Store[]>([]);
+  const [activeStoreId, setActiveStoreId]       = useState<string>('');
+  const [teamMembers, setTeamMembers]           = useState<TeamMember[]>([]);
+  const [loadingStores, setLoadingStores]       = useState(false);
+  const [storesInitialized, setStoresInitialized] = useState(false);
+  const [loadingTeam, setLoadingTeam]           = useState(false);
+  const [newOrderCount, setNewOrderCount]       = useState(0);
+  const [pendingInvites, setPendingInvites]     = useState<PendingInvite[]>([]);
 
   const activeStore = storeList.find(s => s.id === activeStoreId) ?? storeList[0];
 
@@ -120,31 +131,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setActiveStoreId('');
       setTeamMembers([]);
       setPendingInvites([]);
+      setStoresInitialized(false);
       return;
     }
     async function fetchUserStores() {
       setLoadingStores(true);
       try {
-        const sellers = await getSellersByUser(userId);
-        const stores  = sellers.map(s => sellerToStore(s, s.memberRole));
+        const [sellers, user] = await Promise.all([
+          getSellersByUser(userId),
+          getUser(userId),
+        ]);
+        const stores = sellers.map(s => sellerToStore(s, s.memberRole));
         setStoreList(stores);
         if (stores.length > 0) {
           setActiveStoreId(prev => prev || stores[0].id);
+        }
+        // Always check for pending invites regardless of whether user has stores
+        try {
+          const invites = await getPendingInvites(user.phone);
+          setPendingInvites(invites);
+        } catch {
           setPendingInvites([]);
-        } else {
-          // No owned or member stores — check for pending invites by phone
-          try {
-            const user    = await getUser(userId);
-            const invites = await getPendingInvites(user.phone);
-            setPendingInvites(invites);
-          } catch {
-            setPendingInvites([]);
-          }
         }
       } catch {
         setStoreList([]);
+        setPendingInvites([]);
       } finally {
         setLoadingStores(false);
+        setStoresInitialized(true);
       }
     }
     fetchUserStores();
@@ -158,7 +172,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const members = await listMembers(sellerId);
       const mapped: TeamMember[] = members.map(m => ({
         ...m,
-        avatar: initials(m.name),
+        avatar:   initials(m.name),
+        imageUrl: m.imageUrl,
       }));
       setTeamMembers(mapped);
       setStoreList(prev =>
@@ -225,6 +240,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       activeStore,
       teamMembers,
       loadingStores,
+      storesInitialized,
       loadingTeam,
       newOrderCount,
       setNewOrderCount,
@@ -285,12 +301,17 @@ export function sellerToStore(seller: Seller, role: SellerRole = 'owner'): Store
     icon:          tc.icon,
     description:   seller.description,
     imageUrl:      seller.imageUrl,
+    bannerUrl:     seller.bannerUrl,
     location:      seller.location,
     phone:         seller.phone,
     pincode:       seller.pincode,
-    deliveryZones: seller.deliveryZones,
-    verified:      seller.verified,
+    deliveryZones:      seller.deliveryZones,
+    customDeliveryZone: seller.customDeliveryZone,
+    verified:           seller.verified,
     fssaiNumber:   seller.fssaiNumber,
+    gstNumber:     seller.gstNumber,
+    address:       seller.address,
+    socialHandles: seller.socialHandles,
     status:        'live',
     role,
     memberCount:   1,

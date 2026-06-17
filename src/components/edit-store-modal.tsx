@@ -4,6 +4,8 @@ import {
 } from 'react-native';
 import { updateSeller } from '@/services/user-api';
 import { SELLER_TYPE_CONFIG, useStore } from '@/context/store-context';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import type { Store } from '@/context/store-context';
 import type { SellerType } from '@/services/user-api';
 
@@ -18,8 +20,13 @@ interface Props {
 
 export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
   const { updateStoreStatus } = useStore();
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [name,        setName]        = useState('');
   const [description, setDescription] = useState('');
+  const [location,    setLocation]    = useState('');
+  const [address,     setAddress]     = useState('');
   const [type,        setType]        = useState<SellerType>('farmer');
   const [status,      setStatus]      = useState<'live' | 'offline'>('live');
   const [loading,     setLoading]     = useState(false);
@@ -29,6 +36,8 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
     if (visible) {
       setName(store.name);
       setDescription(store.description ?? '');
+      setLocation(store.location);
+      setAddress(store.address ?? '');
       setType(store.type);
       setStatus(store.status);
       setError('');
@@ -45,6 +54,8 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
       await updateSeller(store.id, {
         name:        name.trim(),
         description: description.trim() || undefined,
+        location:    location.trim() || undefined,
+        address:     address.trim() || undefined,
         type,
       });
       updateStoreStatus(store.id, status);
@@ -69,7 +80,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
         <View style={s.sheet}>
 
           <View style={s.head}>
-            <Text style={s.headTitle}>Edit Store</Text>
+            <Text style={s.headTitle}>{t('edit_store_title')}</Text>
             <Pressable style={s.closeBtn} onPress={onClose}>
               <Text style={s.closeTxt}>✕</Text>
             </Pressable>
@@ -78,26 +89,26 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
           <ScrollView style={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
             <View style={s.field}>
-              <Text style={s.label}>Store Name *</Text>
+              <Text style={s.label}>{t('edit_store_name')} *</Text>
               <TextInput
                 style={s.input}
                 value={name}
                 onChangeText={setName}
-                placeholder="e.g. Desi Dairy Armoor"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('edit_store_name_ph')}
+                placeholderTextColor={c.textFaint}
                 editable={!loading}
                 autoCapitalize="words"
               />
             </View>
 
             <View style={s.field}>
-              <Text style={s.label}>Description</Text>
+              <Text style={s.label}>{t('edit_store_desc')}</Text>
               <TextInput
                 style={[s.input, s.textArea]}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Tell buyers about your store, your produce, your story…"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('edit_store_desc_ph')}
+                placeholderTextColor={c.textFaint}
                 multiline
                 numberOfLines={4}
                 editable={!loading}
@@ -105,17 +116,44 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
               />
             </View>
 
+            <View style={s.field}>
+              <Text style={s.label}>{t('edit_store_location')}</Text>
+              <TextInput
+                style={s.input}
+                value={location}
+                onChangeText={setLocation}
+                placeholder={t('edit_store_location_ph')}
+                placeholderTextColor={c.textFaint}
+                editable={!loading}
+              />
+            </View>
+
+            <View style={s.field}>
+              <Text style={s.label}>{t('edit_store_address')}</Text>
+              <TextInput
+                style={[s.input, s.textArea]}
+                value={address}
+                onChangeText={setAddress}
+                placeholder={t('edit_store_address_ph')}
+                placeholderTextColor={c.textFaint}
+                multiline
+                numberOfLines={3}
+                editable={!loading}
+                textAlignVertical="top"
+              />
+            </View>
+
             <View style={[s.field, { marginBottom: 8 }]}>
-              <Text style={s.label}>Store Type</Text>
+              <Text style={s.label}>{t('edit_store_type')}</Text>
               <View style={s.typeGrid}>
-                {TYPE_OPTIONS.map((t) => {
-                  const tc = SELLER_TYPE_CONFIG[t];
-                  const active = type === t;
+                {TYPE_OPTIONS.map((sType) => {
+                  const tc = SELLER_TYPE_CONFIG[sType];
+                  const active = type === sType;
                   return (
                     <Pressable
-                      key={t}
+                      key={sType}
                       style={[s.typeChip, active && s.typeChipActive]}
-                      onPress={() => setType(t)}
+                      onPress={() => setType(sType)}
                       disabled={loading}>
                       <Text style={{ fontSize: 20 }}>{tc.icon}</Text>
                       <Text style={[s.typeLabel, active && s.typeLabelActive]}>{tc.label}</Text>
@@ -126,7 +164,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
             </View>
 
             <View style={s.field}>
-              <Text style={s.label}>Store Status</Text>
+              <Text style={s.label}>{t('edit_store_status')}</Text>
               <View style={s.statusRow}>
                 <Pressable
                   style={[s.statusBtn, status === 'live' && s.statusBtnLive]}
@@ -134,8 +172,8 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
                   disabled={loading}>
                   <Text style={{ fontSize: 22 }}>🟢</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.statusLabel, status === 'live' && s.statusLabelLive]}>Live</Text>
-                    <Text style={s.statusDesc}>Visible · accepting orders</Text>
+                    <Text style={[s.statusLabel, status === 'live' && s.statusLabelLive]}>{t('profile_store_live')}</Text>
+                    <Text style={s.statusDesc}>{t('edit_store_live_desc')}</Text>
                   </View>
                   {status === 'live' && <Text style={s.statusCheck}>✓</Text>}
                 </Pressable>
@@ -145,10 +183,10 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
                   disabled={loading}>
                   <Text style={{ fontSize: 22 }}>⚫</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.statusLabel, status === 'offline' && s.statusLabelOffline]}>Offline</Text>
-                    <Text style={s.statusDesc}>Hidden from buyers</Text>
+                    <Text style={[s.statusLabel, status === 'offline' && s.statusLabelOffline]}>{t('profile_store_offline')}</Text>
+                    <Text style={s.statusDesc}>{t('edit_store_offline_desc')}</Text>
                   </View>
-                  {status === 'offline' && <Text style={[s.statusCheck, { color: '#6b7280' }]}>✓</Text>}
+                  {status === 'offline' && <Text style={[s.statusCheck, { color: c.textMuted }]}>✓</Text>}
                 </Pressable>
               </View>
             </View>
@@ -163,13 +201,13 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
 
           <View style={s.footer}>
             <Pressable style={s.cancelBtn} onPress={onClose} disabled={loading}>
-              <Text style={s.cancelTxt}>Cancel</Text>
+              <Text style={s.cancelTxt}>{t('decline_cancel')}</Text>
             </Pressable>
             <Pressable
               style={[s.saveBtn, !canSave && s.saveBtnDisabled]}
               onPress={handleSave}
               disabled={!canSave}>
-              <Text style={s.saveTxt}>{loading ? 'Saving…' : 'Save Changes'}</Text>
+              <Text style={s.saveTxt}>{loading ? t('edit_store_saving') : t('edit_store_save')}</Text>
             </Pressable>
           </View>
 
@@ -179,122 +217,124 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-    maxHeight: '90%',
-  },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      overflow: 'hidden',
+      maxHeight: '90%',
+    },
 
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  headTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  closeBtn: {
-    width: 32, height: 32,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeTxt: { fontSize: 13, color: '#374151', fontWeight: '700' },
+    head: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    headTitle: { fontSize: 17, fontWeight: '700', color: c.text },
+    closeBtn: {
+      width: 32, height: 32,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 16,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    closeTxt: { fontSize: 13, color: c.textSub, fontWeight: '700' },
 
-  body: { padding: 20 },
+    body: { padding: 20 },
 
-  field: { marginBottom: 18 },
-  label: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#f9fafb',
-  },
-  textArea: { height: 100, paddingTop: 12 },
+    field: { marginBottom: 18 },
+    label: { fontSize: 12, fontWeight: '600', color: c.textSub, marginBottom: 6 },
+    input: {
+      borderWidth: 1.5,
+      borderColor: c.border,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: c.text,
+      backgroundColor: c.bgScreen,
+    },
+    textArea: { height: 100, paddingTop: 12 },
 
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-  },
-  typeChipActive: { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  typeLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  typeLabelActive: { color: '#166534' },
+    typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    typeChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgScreen,
+    },
+    typeChipActive: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    typeLabel: { fontSize: 12, fontWeight: '600', color: c.textMuted },
+    typeLabelActive: { color: c.primaryText },
 
-  statusRow: { flexDirection: 'row', gap: 10 },
-  statusBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-  },
-  statusBtnLive:    { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  statusBtnOffline: { borderColor: '#6b7280', backgroundColor: '#f9fafb' },
-  statusLabel:        { fontSize: 13, fontWeight: '700', color: '#374151' },
-  statusLabelLive:    { color: '#166534' },
-  statusLabelOffline: { color: '#374151' },
-  statusDesc:  { fontSize: 10, color: '#9ca3af', marginTop: 2 },
-  statusCheck: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
+    statusRow: { flexDirection: 'row', gap: 10 },
+    statusBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 12,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgScreen,
+    },
+    statusBtnLive:    { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    statusBtnOffline: { borderColor: c.textMuted, backgroundColor: c.bgScreen },
+    statusLabel:        { fontSize: 13, fontWeight: '700', color: c.textSub },
+    statusLabelLive:    { color: c.primaryText },
+    statusLabelOffline: { color: c.textSub },
+    statusDesc:  { fontSize: 10, color: c.textFaint, marginTop: 2 },
+    statusCheck: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
 
-  errorBox: {
-    backgroundColor: '#fff5f5',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    marginBottom: 8,
-  },
-  errorTxt: { fontSize: 12, color: '#dc2626' },
+    errorBox: {
+      backgroundColor: c.errorBg,
+      borderRadius: 8,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: c.errorBorder,
+      marginBottom: 8,
+    },
+    errorTxt: { fontSize: 12, color: c.errorText },
 
-  footer: {
-    flexDirection: 'row',
-    gap: 10,
-    padding: 16,
-    paddingBottom: 28,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#d1d5db',
-    alignItems: 'center',
-  },
-  cancelTxt: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: '#2d7a47',
-    alignItems: 'center',
-  },
-  saveBtnDisabled: { opacity: 0.45 },
-  saveTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
-});
+    footer: {
+      flexDirection: 'row',
+      gap: 10,
+      padding: 16,
+      paddingBottom: 28,
+      borderTopWidth: 1,
+      borderTopColor: c.borderLight,
+    },
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 13,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: c.borderMid,
+      alignItems: 'center',
+    },
+    cancelTxt: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    saveBtn: {
+      flex: 1,
+      paddingVertical: 13,
+      borderRadius: 12,
+      backgroundColor: '#2d7a47',
+      alignItems: 'center',
+    },
+    saveBtnDisabled: { opacity: 0.45 },
+    saveTxt: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  });
+}

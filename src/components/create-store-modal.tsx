@@ -6,6 +6,10 @@ import {
 import type { SellerType, ShipsTo } from '@/services/user-api';
 import { createSeller } from '@/services/user-api';
 import { sellerToStore, SELLER_TYPE_CONFIG, DELIVERY_ZONE_CONFIG, type Store } from '@/context/store-context';
+import { useAuth } from '@/context/auth-context';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
+import { lookupPincode, type PincodeInfo } from '@/utils/pincode';
 
 interface Props {
   visible: boolean;
@@ -17,6 +21,10 @@ const SELLER_TYPES: SellerType[] = ['farmer', 'dairy', 'homefood', 'artisan', 't
 const DELIVERY_ZONES: ShipsTo[]  = ['mandal', 'district', 'state', 'national'];
 
 export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
+  const { session } = useAuth();
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [name,         setName]         = useState('');
   const [type,         setType]         = useState<SellerType>('farmer');
   const [phone,        setPhone]        = useState('');
@@ -27,19 +35,31 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
   const [zones,        setZones]        = useState<ShipsTo[]>([]);
   const [saving,       setSaving]       = useState(false);
   const [error,        setError]        = useState('');
+  const [pincodeInfo,  setPincodeInfo]  = useState<PincodeInfo | null>(null);
+  const [pincodeLoading, setPincodeLoading] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     setName(''); setType('farmer'); setPhone(''); setLocation('');
     setPincode(''); setDescription(''); setFssaiNumber(''); setZones([]);
-    setError('');
+    setError(''); setPincodeInfo(null);
   }, [visible]);
+
+  useEffect(() => {
+    setPincodeInfo(null);
+    if (!/^\d{6}$/.test(pincode)) return;
+    let cancelled = false;
+    setPincodeLoading(true);
+    lookupPincode(pincode).then(info => {
+      if (!cancelled) { setPincodeInfo(info); setPincodeLoading(false); }
+    });
+    return () => { cancelled = true; };
+  }, [pincode]);
 
   function toggleZone(zone: ShipsTo) {
     setZones(prev => prev.includes(zone) ? prev.filter(z => z !== zone) : [...prev, zone]);
   }
 
-  // Accept 10-digit number, +91XXXXXXXXXX, or 91XXXXXXXXXX
   function normalizePhone(raw: string): string {
     const digits = raw.replace(/\D/g, '');
     if (digits.length === 10) return `+91${digits}`;
@@ -51,15 +71,16 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
     setError('');
     const normalizedPhone = normalizePhone(phone.trim());
 
-    if (!name.trim())                              { setError('Store name is required'); return; }
-    if (!/^\+91[6-9]\d{9}$/.test(normalizedPhone)){ setError('Enter a valid 10-digit Indian mobile number'); return; }
-    if (!location.trim())                          { setError('Location is required (e.g. Nizamabad, Telangana)'); return; }
-    if (!/^\d{6}$/.test(pincode))                  { setError('Enter a valid 6-digit pincode'); return; }
-    if (zones.length === 0)                        { setError('Select at least one delivery zone'); return; }
+    if (!name.trim())                              { setError(t('create_store_err_name')); return; }
+    if (!/^\+91[6-9]\d{9}$/.test(normalizedPhone)){ setError(t('create_store_err_phone')); return; }
+    if (!location.trim())                          { setError(t('create_store_err_location')); return; }
+    if (!/^\d{6}$/.test(pincode))                  { setError(t('create_store_err_pincode')); return; }
+    if (zones.length === 0)                        { setError(t('create_store_err_zones')); return; }
 
     setSaving(true);
     try {
       const seller = await createSeller({
+        userId:        session?.userId,
         name:          name.trim(),
         type,
         phone:         normalizedPhone,
@@ -88,12 +109,12 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
           <View style={s.sheetHeader}>
             <View style={s.handle} />
             <View style={s.titleRow}>
-              <Text style={s.title}>Create New Store</Text>
+              <Text style={s.title}>{t('create_store_title')}</Text>
               <Pressable style={s.closeBtn} onPress={onClose}>
                 <Text style={s.closeTxt}>✕</Text>
               </Pressable>
             </View>
-            <Text style={s.subtitle}>Your store will be visible after admin verification</Text>
+            <Text style={s.subtitle}>{t('create_store_subtitle')}</Text>
           </View>
 
           <ScrollView
@@ -102,20 +123,20 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             contentContainerStyle={s.scrollContent}>
 
             {/* Store Type */}
-            <Text style={s.fieldLabel}>Store Type <Text style={s.required}>*</Text></Text>
+            <Text style={s.fieldLabel}>{t('create_store_type')} <Text style={s.required}>*</Text></Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={{ marginBottom: 18 }}
               contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-              {SELLER_TYPES.map(t => {
-                const tc = SELLER_TYPE_CONFIG[t];
-                const active = type === t;
+              {SELLER_TYPES.map(sType => {
+                const tc = SELLER_TYPE_CONFIG[sType];
+                const active = type === sType;
                 return (
                   <Pressable
-                    key={t}
+                    key={sType}
                     style={[s.typeChip, active && s.typeChipActive]}
-                    onPress={() => setType(t)}>
+                    onPress={() => setType(sType)}>
                     <Text style={s.typeChipIcon}>{tc.icon}</Text>
                     <Text style={[s.typeChipLabel, active && s.typeChipLabelActive]}>
                       {tc.label}
@@ -126,11 +147,11 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             </ScrollView>
 
             {/* Store Name */}
-            <Field label="Store Name" required>
+            <Field label={t('create_store_name')} required c={c}>
               <TextInput
                 style={s.input}
-                placeholder="e.g. Ravi Organic Farm"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('create_store_name_ph')}
+                placeholderTextColor={c.textFaint}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -138,11 +159,11 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             </Field>
 
             {/* Phone */}
-            <Field label="Mobile Number" required hint="10-digit Indian number · used as store contact">
+            <Field label={t('create_store_phone')} required hint={t('create_store_phone_hint')} c={c}>
               <TextInput
                 style={s.input}
-                placeholder="e.g. 9876543210"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('create_store_phone_ph')}
+                placeholderTextColor={c.textFaint}
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
@@ -151,11 +172,11 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             </Field>
 
             {/* Location */}
-            <Field label="Location" required hint="Display name shown to buyers">
+            <Field label={t('create_store_location')} required hint={t('create_store_location_hint')} c={c}>
               <TextInput
                 style={s.input}
-                placeholder="e.g. Nizamabad, Telangana"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('create_store_location_ph')}
+                placeholderTextColor={c.textFaint}
                 value={location}
                 onChangeText={setLocation}
                 autoCapitalize="words"
@@ -163,20 +184,40 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             </Field>
 
             {/* Pincode */}
-            <Field label="Pincode" required hint="Used to set delivery coordinates">
+            <Field label={t('create_store_pincode')} required hint={t('create_store_pincode_hint')} c={c}>
               <TextInput
                 style={s.input}
-                placeholder="6-digit pincode"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('create_store_pincode_ph')}
+                placeholderTextColor={c.textFaint}
                 value={pincode}
                 onChangeText={setPincode}
                 keyboardType="number-pad"
                 maxLength={6}
               />
             </Field>
+            {pincodeLoading && (
+              <View style={s.pinInfoRow}>
+                <ActivityIndicator size="small" color={c.primary} />
+                <Text style={s.pinInfoText}>Looking up pin code…</Text>
+              </View>
+            )}
+            {!pincodeLoading && pincodeInfo && (
+              <View style={s.pinInfoRow}>
+                <Text style={s.pinInfoDot}>✓</Text>
+                <Text style={s.pinInfoText} numberOfLines={1}>
+                  {pincodeInfo.name}, {pincodeInfo.district}, {pincodeInfo.state}
+                </Text>
+              </View>
+            )}
+            {!pincodeLoading && pincode.length === 6 && !pincodeInfo && (
+              <View style={s.pinInfoRow}>
+                <Text style={[s.pinInfoDot, { color: c.errorTextDark }]}>✕</Text>
+                <Text style={[s.pinInfoText, { color: c.errorTextDark }]}>Invalid pin code</Text>
+              </View>
+            )}
 
             {/* Delivery Zones */}
-            <Text style={s.fieldLabel}>Delivery Zones <Text style={s.required}>*</Text></Text>
+            <Text style={s.fieldLabel}>{t('create_store_zones')} <Text style={s.required}>*</Text></Text>
             <View style={s.zoneGrid}>
               {DELIVERY_ZONES.map(zone => {
                 const zc = DELIVERY_ZONE_CONFIG[zone];
@@ -197,11 +238,11 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             </View>
 
             {/* Description */}
-            <Field label="Description" hint="Optional · shown on your store profile">
+            <Field label={t('create_store_desc')} hint={t('create_store_desc_hint')} c={c}>
               <TextInput
                 style={[s.input, s.textArea]}
-                placeholder="Tell buyers what you sell and what makes your store special…"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('create_store_desc_ph')}
+                placeholderTextColor={c.textFaint}
                 value={description}
                 onChangeText={setDescription}
                 multiline
@@ -211,11 +252,11 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             </Field>
 
             {/* FSSAI */}
-            <Field label="FSSAI License Number" hint="Optional · required for food sellers">
+            <Field label={t('create_store_fssai')} hint={t('create_store_fssai_hint')} c={c}>
               <TextInput
                 style={[s.input, s.monoInput]}
-                placeholder="14-digit FSSAI number"
-                placeholderTextColor="#9ca3af"
+                placeholder={t('create_store_fssai_ph')}
+                placeholderTextColor={c.textFaint}
                 value={fssaiNumber}
                 onChangeText={setFssaiNumber}
                 keyboardType="number-pad"
@@ -237,13 +278,11 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
               disabled={saving}>
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={s.saveBtnTxt}>Create Store</Text>
+                : <Text style={s.saveBtnTxt}>{t('create_store_btn')}</Text>
               }
             </Pressable>
 
-            <Text style={s.verificationNote}>
-              New stores start as unverified. Upload KYC documents to get the Verified badge.
-            </Text>
+            <Text style={s.verificationNote}>{t('create_store_note')}</Text>
 
             <View style={{ height: 32 }} />
           </ScrollView>
@@ -255,150 +294,161 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
 
 // ── Field wrapper ─────────────────────────────────────────────────────────────
 
-function Field({ label, required, hint, children }: {
-  label: string; required?: boolean; hint?: string; children: React.ReactNode;
+function Field({ label, required, hint, children, c }: {
+  label: string; required?: boolean; hint?: string; children: React.ReactNode; c: AppColors;
 }) {
   return (
-    <View style={s.field}>
+    <View style={{ marginBottom: 16 }}>
       <View style={{ flexDirection: 'row', gap: 4, marginBottom: 6 }}>
-        <Text style={s.fieldLabel}>{label}</Text>
-        {required && <Text style={s.required}>*</Text>}
+        <Text style={{ fontSize: 13, fontWeight: '600', color: c.textSub }}>{label}</Text>
+        {required && <Text style={{ fontSize: 13, color: '#ef4444', fontWeight: '700' }}>*</Text>}
       </View>
       {children}
-      {hint ? <Text style={s.fieldHint}>{hint}</Text> : null}
+      {hint ? <Text style={{ fontSize: 11, color: c.textFaint, marginTop: 4 }}>{hint}</Text> : null}
     </View>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'flex-end' },
 
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '92%',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  sheetHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  handle: {
-    width: 40, height: 4,
-    backgroundColor: '#d1d5db',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  title: { fontSize: 18, fontWeight: '700', color: '#111827' },
-  subtitle: { fontSize: 12, color: '#6b7280' },
-  closeBtn: {
-    width: 30, height: 30,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeTxt: { fontSize: 12, color: '#6b7280', fontWeight: '700' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: '92%',
+      shadowColor: '#000',
+      shadowOpacity: 0.18,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+    sheetHeader: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    handle: {
+      width: 40, height: 4,
+      backgroundColor: c.borderMid,
+      borderRadius: 2,
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    title: { fontSize: 18, fontWeight: '700', color: c.text },
+    subtitle: { fontSize: 12, color: c.textMuted },
+    closeBtn: {
+      width: 30, height: 30,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closeTxt: { fontSize: 12, color: c.textMuted, fontWeight: '700' },
 
-  scrollContent: { paddingHorizontal: 20, paddingTop: 20 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 20 },
 
-  // Type selector
-  typeChip: {
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-    minWidth: 80,
-    gap: 4,
-  },
-  typeChipActive: { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  typeChipIcon: { fontSize: 22 },
-  typeChipLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280' },
-  typeChipLabelActive: { color: '#166534' },
+    // Type selector
+    typeChip: {
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgScreen,
+      minWidth: 80,
+      gap: 4,
+    },
+    typeChipActive: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    typeChipIcon: { fontSize: 22 },
+    typeChipLabel: { fontSize: 11, fontWeight: '600', color: c.textMuted },
+    typeChipLabelActive: { color: c.primaryText },
 
-  // Delivery zones
-  zoneGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },
-  zoneChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-    width: '47%',
-  },
-  zoneChipIcon: { fontSize: 16 },
-  zoneChipLabel: { fontSize: 12, color: '#6b7280', flex: 1 },
-  zoneCheck: { fontSize: 12, fontWeight: '700' },
+    // Delivery zones
+    zoneGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },
+    zoneChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgScreen,
+      width: '47%',
+    },
+    zoneChipIcon: { fontSize: 16 },
+    zoneChipLabel: { fontSize: 12, color: c.textMuted, flex: 1 },
+    zoneCheck: { fontSize: 12, fontWeight: '700' },
 
-  // Fields
-  field: { marginBottom: 16 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  required: { fontSize: 13, color: '#ef4444', fontWeight: '700' },
-  fieldHint: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+    // Fields (used for direct-JSX labels outside Field component)
+    fieldLabel: { fontSize: 13, fontWeight: '600', color: c.textSub },
+    required: { fontSize: 13, color: '#ef4444', fontWeight: '700' },
 
-  input: {
-    height: 46,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: '#111827',
-    backgroundColor: '#f9fafb',
-  },
-  textArea: { height: 80, paddingTop: 12 },
-  monoInput: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    letterSpacing: 1,
-  },
+    input: {
+      height: 46,
+      borderWidth: 1,
+      borderColor: c.borderMid,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      fontSize: 14,
+      color: c.text,
+      backgroundColor: c.bgScreen,
+    },
+    textArea: { height: 80, paddingTop: 12 },
+    monoInput: {
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      letterSpacing: 1,
+    },
 
-  errorBox: {
-    backgroundColor: '#fef2f2',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    padding: 10,
-    marginBottom: 12,
-  },
-  errorText: { fontSize: 13, color: '#991b1b' },
+    errorBox: {
+      backgroundColor: c.errorBg,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.errorBorder,
+      padding: 10,
+      marginBottom: 12,
+    },
+    errorText: { fontSize: 13, color: c.errorTextDark },
 
-  saveBtn: {
-    backgroundColor: '#2d7a47',
-    borderRadius: 12,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
+    saveBtn: {
+      backgroundColor: '#2d7a47',
+      borderRadius: 12,
+      height: 50,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    saveBtnDisabled: { opacity: 0.6 },
+    saveBtnTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
 
-  verificationNote: {
-    fontSize: 11,
-    color: '#9ca3af',
-    textAlign: 'center',
-    marginTop: 12,
-  },
-});
+    verificationNote: {
+      fontSize: 11,
+      color: c.textFaint,
+      textAlign: 'center',
+      marginTop: 12,
+    },
+
+    pinInfoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: -10,
+      marginBottom: 14,
+      paddingHorizontal: 4,
+    },
+    pinInfoDot: { fontSize: 12, color: '#16a34a', fontWeight: '700' },
+    pinInfoText: { fontSize: 12, color: c.textSub, flex: 1 },
+  });
+}
