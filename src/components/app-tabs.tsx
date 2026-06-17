@@ -9,11 +9,14 @@ import {
 import { Pressable, View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '@/context/store-context';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors } from '@/hooks/use-app-colors';
 
 type TabButtonProps = TabTriggerSlotProps & { icon?: string; badge?: number };
 
 function TabButton({ icon = '', badge, isFocused, children, ...props }: TabButtonProps) {
-  const color = isFocused ? '#2d7a47' : '#6b7280';
+  const c = useAppColors();
+  const color = isFocused ? c.primary : c.textMuted;
   return (
     <Pressable {...props} style={s.tab}>
       <View style={s.iconWrap}>
@@ -32,8 +35,11 @@ function TabButton({ icon = '', badge, isFocused, children, ...props }: TabButto
 
 function BottomBar({ children, ...props }: TabListProps) {
   const insets = useSafeAreaInsets();
+  const c = useAppColors();
   return (
-    <View {...props} style={[s.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View
+      {...props}
+      style={[s.bar, { paddingBottom: Math.max(insets.bottom, 8), backgroundColor: c.bg, borderTopColor: c.border }]}>
       {children}
     </View>
   );
@@ -41,6 +47,7 @@ function BottomBar({ children, ...props }: TabListProps) {
 
 export default function AppTabs() {
   const { newOrderCount } = useStore();
+  const { t } = useLanguage();
   return (
     <Tabs>
       <TabSlot style={{ flex: 1 }} />
@@ -48,23 +55,23 @@ export default function AppTabs() {
         <BottomBar>
           {/* @ts-ignore icon is a custom prop passed through asChild */}
           <TabTrigger name="index" href="/" asChild>
-            <TabButton icon="📊">Dashboard</TabButton>
+            <TabButton icon="📊">{t('tab_dashboard')}</TabButton>
           </TabTrigger>
           {/* @ts-ignore */}
           <TabTrigger name="products" href="/products" asChild>
-            <TabButton icon="🌾">Products</TabButton>
+            <TabButton icon="🌾">{t('tab_products')}</TabButton>
           </TabTrigger>
           {/* @ts-ignore */}
           <TabTrigger name="orders" href="/orders" asChild>
-            <TabButton icon="📦" badge={newOrderCount || undefined}>Orders</TabButton>
+            <TabButton icon="📦" badge={newOrderCount || undefined}>{t('tab_orders')}</TabButton>
           </TabTrigger>
           {/* @ts-ignore */}
           <TabTrigger name="analytics" href="/analytics" asChild>
-            <TabButton icon="📈">Analytics</TabButton>
+            <TabButton icon="📈">{t('tab_analytics')}</TabButton>
           </TabTrigger>
           {/* @ts-ignore */}
           <TabTrigger name="profile" href="/profile" asChild>
-            <TabButton icon="🏪">Store</TabButton>
+            <TabButton icon="🏪">{t('tab_store')}</TabButton>
           </TabTrigger>
         </BottomBar>
       </TabList>

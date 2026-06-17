@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ export function useToast(): ToastContextValue {
   return ctx;
 }
 
-// ── Theme config per toast type ───────────────────────────────────────────────
+// ── Theme config per toast type (fixed semantic notification colors) ───────────
 
 const TOAST_THEME: Record<ToastType, { bg: string; border: string; icon: string; text: string }> = {
   success: { bg: '#f0fdf4', border: '#86efac', icon: '✅', text: '#166534' },
@@ -47,6 +48,8 @@ const TOAST_THEME: Record<ToastType, { bg: string; border: string; icon: string;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [toast, setToast] = useState<ToastEntry | null>(null);
   const [confirm, setConfirm] = useState<ConfirmOptions | null>(null);
   const slideY = useRef(new Animated.Value(-120)).current;
@@ -127,69 +130,71 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
-  // Toast
-  toastWrap: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 9999,
-  },
-  toast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  toastIcon: { fontSize: 18 },
-  toastMsg: { flex: 1, fontSize: 14, fontWeight: '500', lineHeight: 20 },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    // Toast
+    toastWrap: {
+      position: 'absolute',
+      left: 16,
+      right: 16,
+      zIndex: 9999,
+    },
+    toast: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    toastIcon: { fontSize: 18 },
+    toastMsg: { flex: 1, fontSize: 14, fontWeight: '500', lineHeight: 20 },
 
-  // Confirm sheet
-  container: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 36,
-    paddingTop: 12,
-  },
-  sheetBar: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#d1d5db',
-    marginBottom: 20,
-  },
-  sheetTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  sheetMsg: { fontSize: 14, color: '#6b7280', lineHeight: 21, marginBottom: 28 },
-  sheetBtns: { flexDirection: 'row', gap: 12 },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    alignItems: 'center',
-  },
-  cancelTxt: { fontSize: 15, fontWeight: '600', color: '#374151' },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#2d7a47',
-    alignItems: 'center',
-  },
-  destructiveBtn: { backgroundColor: '#dc2626' },
-  confirmTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
-});
+    // Confirm sheet
+    container: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { backgroundColor: 'rgba(0,0,0,0.45)' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 24,
+      paddingBottom: 36,
+      paddingTop: 12,
+    },
+    sheetBar: {
+      alignSelf: 'center',
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: c.borderMid,
+      marginBottom: 20,
+    },
+    sheetTitle: { fontSize: 18, fontWeight: '700', color: c.text, marginBottom: 8 },
+    sheetMsg: { fontSize: 14, color: c.textMuted, lineHeight: 21, marginBottom: 28 },
+    sheetBtns: { flexDirection: 'row', gap: 12 },
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      alignItems: 'center',
+    },
+    cancelTxt: { fontSize: 15, fontWeight: '600', color: c.textSub },
+    confirmBtn: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: '#2d7a47',
+      alignItems: 'center',
+    },
+    destructiveBtn: { backgroundColor: '#dc2626' },
+    confirmTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  });
+}

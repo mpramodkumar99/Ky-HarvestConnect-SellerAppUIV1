@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,6 +6,7 @@ import AppTabs from '@/components/app-tabs';
 import { AuthFlow } from '@/components/auth-flow';
 import { CreateStoreModal } from '@/components/create-store-modal';
 import { PendingInviteModal } from '@/components/pending-invite-modal';
+
 import { useAuth } from '@/context/auth-context';
 import { useStore } from '@/context/store-context';
 import { useToast } from '@/components/toast-provider';
@@ -19,9 +20,11 @@ const STEPS = [
 // ── No-Store Onboarding ───────────────────────────────────────────────────────
 
 function OnboardingScreen() {
-  const { addStore } = useStore();
+  const { addStore, pendingInvites } = useStore();
+  const { logout } = useAuth();
   const { showToast } = useToast();
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen,  setCreateOpen]  = useState(false);
+  const [invitesOpen, setInvitesOpen] = useState(false);
 
   return (
     <View style={s.screen}>
@@ -34,6 +37,7 @@ function OnboardingScreen() {
         }}
         onClose={() => setCreateOpen(false)}
       />
+      <PendingInviteModal visible={invitesOpen} onDone={() => setInvitesOpen(false)} />
 
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
@@ -84,11 +88,21 @@ function OnboardingScreen() {
         </View>
 
         <View style={s.footer}>
+          {pendingInvites.length > 0 && (
+            <Pressable style={s.inviteBanner} onPress={() => setInvitesOpen(true)}>
+              <Text style={s.inviteBannerTxt}>
+                📩  You have {pendingInvites.length} pending store invite{pendingInvites.length > 1 ? 's' : ''} — tap to review
+              </Text>
+            </Pressable>
+          )}
           <Pressable style={s.ctaBtn} onPress={() => setCreateOpen(true)}>
             <Text style={s.ctaTxt}>Create My Store</Text>
             <View style={s.ctaArrow} />
           </Pressable>
           <Text style={s.footerNote}>Takes less than 2 minutes</Text>
+          <Pressable onPress={logout} style={s.switchAccount}>
+            <Text style={s.switchAccountTxt}>Wrong number? Sign in with a different account</Text>
+          </Pressable>
         </View>
 
       </SafeAreaView>
@@ -99,9 +113,15 @@ function OnboardingScreen() {
 // ── Root Gate ─────────────────────────────────────────────────────────────────
 
 export default function AppGate() {
-  const { initializing, isAuthenticated } = useAuth();
+  const { initializing, isAuthenticated, session } = useAuth();
   const { stores, loadingStores, storesInitialized, pendingInvites } = useStore();
   const [invitesDismissed, setInvitesDismissed] = useState(false);
+
+  // Reset dismissed flag whenever the logged-in user changes so a new user's
+  // pending invites are never hidden by a previous user's "Skip for now"
+  useEffect(() => {
+    setInvitesDismissed(false);
+  }, [session?.userId]);
 
   // Auth check in progress — AnimatedSplashOverlay covers the first 900ms
   if (initializing) {
@@ -234,6 +254,13 @@ const s = StyleSheet.create({
   badgeTxt: { fontSize: 11, fontWeight: '600', color: '#166534' },
 
   footer: { gap: 10, paddingBottom: 8 },
+  inviteBanner: {
+    backgroundColor: '#fffbeb', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14,
+    borderWidth: 1.5, borderColor: '#fbbf24', alignItems: 'center',
+  },
+  inviteBannerTxt: { fontSize: 13, fontWeight: '600', color: '#92400e', textAlign: 'center' },
+  switchAccount:    { alignItems: 'center', paddingVertical: 4 },
+  switchAccountTxt: { fontSize: 12, color: '#9ca3af', textDecorationLine: 'underline' },
   ctaBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
     backgroundColor: '#2d7a47', borderRadius: 16, paddingVertical: 16,

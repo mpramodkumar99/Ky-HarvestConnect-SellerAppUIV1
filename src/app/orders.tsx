@@ -11,32 +11,19 @@ import { DeclineReasonModal } from '@/components/decline-reason-modal';
 import { OrderDetailModal } from '@/components/order-detail-modal';
 import { OrderFilterModal, type OrderFilters } from '@/components/order-filter-modal';
 import { useStore } from '@/context/store-context';
+import { useLanguage } from '@/context/language-context';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import {
   listOrders, updateOrderStatus, cancelOrder,
   toSellerTab, payMethodLabel, formatOrderDate,
   type Order, type SellerTab,
 } from '@/services/order-api';
 
-const TABS: { label: string; value: SellerTab }[] = [
-  { label: 'New',       value: 'new' },
-  { label: 'Accepted',  value: 'accepted' },
-  { label: 'Dispatched', value: 'dispatched' },
-  { label: 'Delivered', value: 'delivered' },
-  { label: 'Cancelled', value: 'cancelled' },
-];
-
-function nextAction(order: Order): { label: string; color: string; bg: string } | null {
-  if (order.status === 'confirmed' || order.status === 'pending_payment')
-    return { label: 'Accept Order ✓', color: '#fff', bg: '#2d7a47' };
-  if (order.status === 'processing')
-    return { label: 'Mark Dispatched 🚚', color: '#166534', bg: '#f0fdf4' };
-  if (order.status === 'dispatched' || order.status === 'in_transit')
-    return { label: 'Mark Delivered ✓', color: '#1e40af', bg: '#eff6ff' };
-  return null;
-}
-
 export default function OrdersScreen() {
   const { activeStore, setNewOrderCount } = useStore();
+  const { t } = useLanguage();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SellerTab>('new');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -47,6 +34,24 @@ export default function OrdersScreen() {
   const [declineOrder, setDeclineOrder] = useState<Order | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<OrderFilters>({ paymentMethod: null });
+
+  const TABS: { label: string; value: SellerTab }[] = [
+    { label: t('orders_new'),        value: 'new' },
+    { label: t('orders_accepted'),   value: 'accepted' },
+    { label: t('orders_dispatched'), value: 'dispatched' },
+    { label: t('orders_delivered'),  value: 'delivered' },
+    { label: t('orders_cancelled'),  value: 'cancelled' },
+  ];
+
+  function nextAction(order: Order): { label: string; color: string; bg: string } | null {
+    if (order.status === 'confirmed' || order.status === 'pending_payment')
+      return { label: t('orders_accept_order'), color: '#fff', bg: '#2d7a47' };
+    if (order.status === 'processing')
+      return { label: t('orders_mark_dispatched'), color: '#166534', bg: '#f0fdf4' };
+    if (order.status === 'dispatched' || order.status === 'in_transit')
+      return { label: t('orders_mark_delivered'), color: '#1e40af', bg: '#eff6ff' };
+    return null;
+  }
 
   const fetchOrders = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -66,7 +71,6 @@ export default function OrdersScreen() {
     return orders.filter((o) => toSellerTab(o.status) === tab).length;
   }
 
-  // Keep tab badge in sync whenever orders change
   useEffect(() => {
     setNewOrderCount(tabCount('new'));
   }, [orders, setNewOrderCount]);
@@ -182,11 +186,11 @@ export default function OrdersScreen() {
           <View style={s.headerRow}>
             <Pressable onPress={() => setSwitcherOpen(true)}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={s.headerTitle}>Order Management</Text>
+                <Text style={s.headerTitle}>{t('orders_header_title')}</Text>
                 <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>⌄</Text>
               </View>
               <Text style={s.headerSub}>
-                {activeStore.name} · {tabCount('new')} new · {tabCount('accepted')} accepted
+                {activeStore.name} · {tabCount('new')} {t('orders_new')} · {tabCount('accepted')} {t('orders_accepted')}
               </Text>
             </Pressable>
             <Pressable style={s.filterBtn} onPress={() => setFilterVisible(true)}>
@@ -227,10 +231,10 @@ export default function OrdersScreen() {
       {hasActiveFilter && (
         <View style={s.filterHint}>
           <Text style={s.filterHintTxt}>
-            Filtered by: {payMethodLabel(filters.paymentMethod!).replace(/^\S+ /, '')}
+            {t('orders_filter_hint')} {payMethodLabel(filters.paymentMethod!).replace(/^\S+ /, '')}
           </Text>
           <Pressable onPress={() => setFilters({ paymentMethod: null })}>
-            <Text style={s.filterHintClear}>Clear ✕</Text>
+            <Text style={s.filterHintClear}>{t('orders_filter_clear')}</Text>
           </Pressable>
         </View>
       )}
@@ -250,13 +254,13 @@ export default function OrdersScreen() {
         {loading ? (
           <View style={s.emptyState}>
             <Text style={{ fontSize: 32 }}>⏳</Text>
-            <Text style={s.emptyTitle}>Loading orders...</Text>
+            <Text style={s.emptyTitle}>{t('orders_loading')}</Text>
           </View>
         ) : filtered.length === 0 ? (
           <View style={s.emptyState}>
             <Text style={{ fontSize: 40 }}>📭</Text>
-            <Text style={s.emptyTitle}>No {activeTab} orders</Text>
-            <Text style={s.emptySub}>Orders will appear here when customers place them</Text>
+            <Text style={s.emptyTitle}>{t('orders_no_orders')}</Text>
+            <Text style={s.emptySub}>{t('orders_empty_sub')}</Text>
           </View>
         ) : (
           filtered.map((order) => {
@@ -275,7 +279,7 @@ export default function OrdersScreen() {
                 <View style={s.orderHead}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.orderId}>{order.id}</Text>
-                    <Text style={s.orderTime}>Placed {formatOrderDate(order.createdAt)}</Text>
+                    <Text style={s.orderTime}>{t('orders_placed')} {formatOrderDate(order.createdAt)}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <OrderStatusBadge status={toSellerTab(order.status)} />
@@ -311,7 +315,7 @@ export default function OrdersScreen() {
                     </View>
                   ))}
                   <View style={s.totalRow}>
-                    <Text style={s.totalLabel}>Total</Text>
+                    <Text style={s.totalLabel}>{t('orders_total')}</Text>
                     <Text style={s.totalAmt}>₹{Math.round(order.total / 100)}</Text>
                   </View>
                 </View>
@@ -324,7 +328,7 @@ export default function OrdersScreen() {
                         style={s.declineBtn}
                         onPress={() => setDeclineOrder(order)}
                         disabled={isActionLoading}>
-                        <Text style={s.declineTxt}>Decline</Text>
+                        <Text style={s.declineTxt}>{t('orders_decline')}</Text>
                       </Pressable>
                     )}
                     <Pressable
@@ -332,7 +336,7 @@ export default function OrdersScreen() {
                       onPress={() => handlePrimaryAction(order)}
                       disabled={isActionLoading}>
                       <Text style={[s.actionBtnTxt, { color: action.color }]}>
-                        {isActionLoading ? 'Processing...' : action.label}
+                        {isActionLoading ? t('orders_processing') : action.label}
                       </Text>
                     </Pressable>
                   </View>
@@ -341,14 +345,14 @@ export default function OrdersScreen() {
                 {order.status === 'delivered' && (
                   <View style={s.completedRow}>
                     <Text style={s.completedTxt}>
-                      ✓ Order completed · ₹{Math.round(order.total * 0.93 / 100)} earned after 7% commission
+                      ✓ {t('orders_completed_txt')} · ₹{Math.round(order.total * 0.93 / 100)} {t('orders_after_commission')}
                     </Text>
                   </View>
                 )}
 
                 {(order.status === 'cancelled' || order.status === 'refund_initiated' || order.status === 'refunded') && order.cancelReason && (
                   <View style={s.cancelRow}>
-                    <Text style={s.cancelTxt}>Reason: {order.cancelReason}</Text>
+                    <Text style={s.cancelTxt}>{t('orders_cancel_reason')} {order.cancelReason}</Text>
                   </View>
                 )}
 
@@ -361,183 +365,185 @@ export default function OrdersScreen() {
   );
 }
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f9fafb' },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.bgScreen },
 
-  header: {
-    backgroundColor: '#2d7a47',
-    paddingHorizontal: 16,
-    paddingBottom: 18,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 8,
-  },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
-  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 3 },
-  filterBtn: {
-    width: 36, height: 36,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterDot: {
-    position: 'absolute',
-    top: 4, right: 4,
-    width: 8, height: 8,
-    borderRadius: 4,
-    backgroundColor: '#f59e0b',
-  },
+    header: {
+      backgroundColor: '#2d7a47',
+      paddingHorizontal: 16,
+      paddingBottom: 18,
+      borderBottomLeftRadius: 20,
+      borderBottomRightRadius: 20,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginTop: 8,
+    },
+    headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
+    headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 3 },
+    filterBtn: {
+      width: 36, height: 36,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterDot: {
+      position: 'absolute',
+      top: 4, right: 4,
+      width: 8, height: 8,
+      borderRadius: 4,
+      backgroundColor: '#f59e0b',
+    },
 
-  tabsWrap: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  tabs: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 99,
-    backgroundColor: '#f3f4f6',
-    gap: 5,
-  },
-  tabActive: { backgroundColor: '#2d7a47' },
-  tabTxt: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  tabTxtActive: { color: '#fff' },
-  tabBadge: {
-    backgroundColor: '#e5e7eb',
-    borderRadius: 99,
-    minWidth: 18, height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
-  tabBadgeTxt: { fontSize: 10, fontWeight: '700', color: '#374151' },
-  tabBadgeTxtActive: { color: '#fff' },
+    tabsWrap: { backgroundColor: c.bg, borderBottomWidth: 1, borderBottomColor: c.border },
+    tabs: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+    tab: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 99,
+      backgroundColor: c.bgSubtle,
+      gap: 5,
+    },
+    tabActive: { backgroundColor: '#2d7a47' },
+    tabTxt: { fontSize: 12, fontWeight: '600', color: c.textMuted },
+    tabTxtActive: { color: '#fff' },
+    tabBadge: {
+      backgroundColor: c.border,
+      borderRadius: 99,
+      minWidth: 18, height: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    },
+    tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
+    tabBadgeTxt: { fontSize: 10, fontWeight: '700', color: c.textSub },
+    tabBadgeTxtActive: { color: '#fff' },
 
-  filterHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#fffbeb',
-    borderBottomWidth: 1,
-    borderBottomColor: '#fde68a',
-  },
-  filterHintTxt: { fontSize: 12, color: '#92400e', fontWeight: '600' },
-  filterHintClear: { fontSize: 12, color: '#d97706', fontWeight: '700' },
+    filterHint: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      backgroundColor: c.warningBg,
+      borderBottomWidth: 1,
+      borderBottomColor: c.warningBorder,
+    },
+    filterHintTxt: { fontSize: 12, color: c.warningText, fontWeight: '600' },
+    filterHintClear: { fontSize: 12, color: c.primary, fontWeight: '700' },
 
-  listContent: { padding: 16, gap: 12, paddingBottom: 32 },
+    listContent: { padding: 16, gap: 12, paddingBottom: 32 },
 
-  emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#111827' },
-  emptySub: { fontSize: 13, color: '#6b7280', textAlign: 'center', maxWidth: 240 },
+    emptyState: { alignItems: 'center', paddingVertical: 60, gap: 10 },
+    emptyTitle: { fontSize: 16, fontWeight: '600', color: c.text },
+    emptySub: { fontSize: 13, color: c.textMuted, textAlign: 'center', maxWidth: 240 },
 
-  orderCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    overflow: 'hidden',
-  },
-  orderHead: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  orderId: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  orderTime: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
-  payMode: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  payModeTxt: { fontSize: 10, color: '#374151', fontWeight: '600' },
+    orderCard: {
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    orderHead: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      padding: 14,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    orderId: { fontSize: 13, fontWeight: '700', color: c.text },
+    orderTime: { fontSize: 11, color: c.textFaint, marginTop: 2 },
+    payMode: {
+      backgroundColor: c.bgSubtle,
+      borderRadius: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    payModeTxt: { fontSize: 10, color: c.textSub, fontWeight: '600' },
 
-  buyerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    padding: 12,
-    paddingTop: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  buyerAvatar: {
-    width: 36, height: 36,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buyerName: { fontSize: 13, fontWeight: '600', color: '#111827' },
-  buyerAddr: { fontSize: 11, color: '#6b7280', marginTop: 1 },
-  callBtn: {
-    width: 34, height: 34,
-    backgroundColor: '#f0fdf4',
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    buyerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      padding: 12,
+      paddingTop: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    buyerAvatar: {
+      width: 36, height: 36,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buyerName: { fontSize: 13, fontWeight: '600', color: c.text },
+    buyerAddr: { fontSize: 11, color: c.textMuted, marginTop: 1 },
+    callBtn: {
+      width: 34, height: 34,
+      backgroundColor: c.primaryBg,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  itemsBox: { padding: 12, gap: 6 },
-  itemRow: { flexDirection: 'row', alignItems: 'center' },
-  itemName: { flex: 1, fontSize: 12, color: '#374151' },
-  itemQty: { fontSize: 12, color: '#6b7280', marginRight: 8 },
-  itemPrice: { fontSize: 12, fontWeight: '600', color: '#111827' },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  totalLabel: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  totalAmt: { fontSize: 15, fontWeight: '700', color: '#2d7a47' },
+    itemsBox: { padding: 12, gap: 6 },
+    itemRow: { flexDirection: 'row', alignItems: 'center' },
+    itemName: { flex: 1, fontSize: 12, color: c.textSub },
+    itemQty: { fontSize: 12, color: c.textMuted, marginRight: 8 },
+    itemPrice: { fontSize: 12, fontWeight: '600', color: c.text },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      borderTopWidth: 1,
+      borderTopColor: c.borderLight,
+      paddingTop: 8,
+      marginTop: 4,
+    },
+    totalLabel: { fontSize: 13, fontWeight: '700', color: c.text },
+    totalAmt: { fontSize: 15, fontWeight: '700', color: c.primary },
 
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-    paddingTop: 0,
-  },
-  declineBtn: {
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  declineTxt: { fontSize: 13, color: '#6b7280', fontWeight: '600' },
-  actionBtn: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#d1fae5',
-  },
-  actionBtnLoading: { opacity: 0.7 },
-  actionBtnTxt: { fontSize: 13, fontWeight: '700' },
+    actionRow: {
+      flexDirection: 'row',
+      gap: 8,
+      padding: 12,
+      paddingTop: 0,
+    },
+    declineBtn: {
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    declineTxt: { fontSize: 13, color: c.textMuted, fontWeight: '600' },
+    actionBtn: {
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.primaryBorder,
+    },
+    actionBtnLoading: { opacity: 0.7 },
+    actionBtnTxt: { fontSize: 13, fontWeight: '700' },
 
-  completedRow: { padding: 12, paddingTop: 0 },
-  completedTxt: { fontSize: 11, color: '#6b7280', textAlign: 'center' },
+    completedRow: { padding: 12, paddingTop: 0 },
+    completedTxt: { fontSize: 11, color: c.textMuted, textAlign: 'center' },
 
-  cancelRow: {
-    padding: 12,
-    paddingTop: 0,
-    backgroundColor: '#fff5f5',
-  },
-  cancelTxt: { fontSize: 11, color: '#dc2626', fontStyle: 'italic' },
-});
+    cancelRow: {
+      padding: 12,
+      paddingTop: 0,
+      backgroundColor: c.errorBg,
+    },
+    cancelTxt: { fontSize: 11, color: c.errorText, fontStyle: 'italic' },
+  });
+}

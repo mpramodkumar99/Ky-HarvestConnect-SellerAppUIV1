@@ -1,18 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useColorScheme as useRNColorScheme } from 'react-native';
+import { ThemeContext } from '@/context/theme-context';
 
-export function useColorScheme() {
+export function useColorScheme(): 'light' | 'dark' {
+  const ctx = useContext(ThemeContext);
   const [hasHydrated, setHasHydrated] = useState(false);
 
-  useEffect(() => {
-    setHasHydrated(true);
-  }, []);
+  useEffect(() => { setHasHydrated(true); }, []);
 
-  const colorScheme = useRNColorScheme();
+  const system = (useRNColorScheme() ?? 'light') as 'light' | 'dark';
 
-  if (hasHydrated) {
-    return colorScheme;
-  }
-
-  return 'light';
+  if (!hasHydrated) return 'light';
+  return ctx ? ctx.scheme : system;
 }

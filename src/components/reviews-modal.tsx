@@ -3,6 +3,7 @@ import {
   Modal, View, Text, Pressable, StyleSheet, ScrollView,
 } from 'react-native';
 import { useToast } from '@/components/toast-provider';
+import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
 interface Review {
   id: string;
@@ -36,11 +37,11 @@ const TOTAL_REVIEWS = STAR_DIST.reduce((s, d) => s + d.count, 0);
 type Filter = 'All' | '5★' | '4★' | '3★' | 'Unresponded';
 const FILTERS: Filter[] = ['All', '5★', '4★', '3★', 'Unresponded'];
 
-function Stars({ rating, size = 13 }: { rating: number; size?: number }) {
+function Stars({ rating, size = 13, inactiveColor }: { rating: number; size?: number; inactiveColor: string }) {
   return (
     <View style={{ flexDirection: 'row', gap: 1 }}>
       {[1, 2, 3, 4, 5].map((i) => (
-        <Text key={i} style={{ fontSize: size, color: i <= rating ? '#f59e0b' : '#e5e7eb' }}>★</Text>
+        <Text key={i} style={{ fontSize: size, color: i <= rating ? '#f59e0b' : inactiveColor }}>★</Text>
       ))}
     </View>
   );
@@ -53,6 +54,8 @@ interface Props {
 
 export function ReviewsModal({ visible, onClose }: Props) {
   const { showToast } = useToast();
+  const c = useAppColors();
+  const s = makeStyles(c);
   const [filter, setFilter] = useState<Filter>('All');
 
   const filtered = REVIEWS.filter((r) => {
@@ -85,7 +88,7 @@ export function ReviewsModal({ visible, onClose }: Props) {
             <View style={s.hero}>
               <View style={s.heroLeft}>
                 <Text style={s.heroScore}>4.8</Text>
-                <Stars rating={5} size={16} />
+                <Stars rating={5} size={16} inactiveColor="rgba(255,255,255,0.3)" />
                 <Text style={s.heroCount}>{TOTAL_REVIEWS} reviews</Text>
               </View>
               <View style={s.distCol}>
@@ -129,7 +132,7 @@ export function ReviewsModal({ visible, onClose }: Props) {
             <View style={s.reviewList}>
               {filtered.length === 0 ? (
                 <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-                  <Text style={{ fontSize: 13, color: '#9ca3af' }}>No reviews in this category</Text>
+                  <Text style={{ fontSize: 13, color: c.textFaint }}>No reviews in this category</Text>
                 </View>
               ) : (
                 filtered.map((review) => (
@@ -145,7 +148,7 @@ export function ReviewsModal({ visible, onClose }: Props) {
                             {new Date(review.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                           </Text>
                         </View>
-                        <Stars rating={review.rating} />
+                        <Stars rating={review.rating} inactiveColor={c.border} />
                         <Text style={s.reviewProduct}>{review.product}</Text>
                       </View>
                     </View>
@@ -184,126 +187,128 @@ export function ReviewsModal({ visible, onClose }: Props) {
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-    maxHeight: '92%',
-  },
+function makeStyles(c: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, justifyContent: 'flex-end' },
+    backdrop: { backgroundColor: 'rgba(0,0,0,0.55)' },
+    sheet: {
+      backgroundColor: c.bg,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      overflow: 'hidden',
+      maxHeight: '92%',
+    },
 
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  headTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  closeBtn: {
-    width: 32, height: 32,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  closeTxt: { fontSize: 13, color: '#374151', fontWeight: '700' },
+    head: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: c.borderLight,
+    },
+    headTitle: { fontSize: 17, fontWeight: '700', color: c.text },
+    closeBtn: {
+      width: 32, height: 32,
+      backgroundColor: c.bgSubtle,
+      borderRadius: 16,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    closeTxt: { fontSize: 13, color: c.textSub, fontWeight: '700' },
 
-  hero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-    padding: 20,
-    backgroundColor: '#1a4a28',
-  },
-  heroLeft: { alignItems: 'center', gap: 4 },
-  heroScore: { fontSize: 40, fontWeight: '800', color: '#fff' },
-  heroCount: { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 4 },
-  distCol: { flex: 1, gap: 5 },
-  distRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  distLabel: { fontSize: 10, color: 'rgba(255,255,255,0.7)', width: 22, textAlign: 'right' },
-  distTrack: {
-    flex: 1, height: 5,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 3, overflow: 'hidden',
-  },
-  distFill: { height: '100%', backgroundColor: '#f59e0b', borderRadius: 3 },
-  distCount: { fontSize: 10, color: 'rgba(255,255,255,0.55)', width: 28 },
+    hero: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 20,
+      padding: 20,
+      backgroundColor: '#1a4a28',
+    },
+    heroLeft: { alignItems: 'center', gap: 4 },
+    heroScore: { fontSize: 40, fontWeight: '800', color: '#fff' },
+    heroCount: { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 4 },
+    distCol: { flex: 1, gap: 5 },
+    distRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    distLabel: { fontSize: 10, color: 'rgba(255,255,255,0.7)', width: 22, textAlign: 'right' },
+    distTrack: {
+      flex: 1, height: 5,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      borderRadius: 3, overflow: 'hidden',
+    },
+    distFill: { height: '100%', backgroundColor: '#f59e0b', borderRadius: 3 },
+    distCount: { fontSize: 10, color: 'rgba(255,255,255,0.55)', width: 28 },
 
-  filterRow: { paddingVertical: 12 },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 99,
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-  },
-  filterChipActive: { borderColor: '#2d7a47', backgroundColor: '#f0fdf4' },
-  filterTxt: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
-  filterTxtActive: { color: '#166534' },
-  filterBadge: {
-    backgroundColor: '#ef4444',
-    borderRadius: 99,
-    minWidth: 16, height: 16,
-    alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  filterBadgeTxt: { fontSize: 9, color: '#fff', fontWeight: '700' },
+    filterRow: { paddingVertical: 12 },
+    filterChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: 99,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgScreen,
+    },
+    filterChipActive: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    filterTxt: { fontSize: 12, fontWeight: '600', color: c.textMuted },
+    filterTxtActive: { color: c.primaryText },
+    filterBadge: {
+      backgroundColor: '#ef4444',
+      borderRadius: 99,
+      minWidth: 16, height: 16,
+      alignItems: 'center', justifyContent: 'center',
+      paddingHorizontal: 3,
+    },
+    filterBadgeTxt: { fontSize: 9, color: '#fff', fontWeight: '700' },
 
-  reviewList: { padding: 16, gap: 12 },
-  reviewCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    gap: 10,
-  },
-  reviewHeader: { flexDirection: 'row', gap: 10 },
-  reviewAvatar: {
-    width: 38, height: 38,
-    borderRadius: 19,
-    backgroundColor: '#2d7a47',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  reviewAvatarTxt: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  reviewBuyer: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  reviewDate: { fontSize: 11, color: '#9ca3af' },
-  reviewProduct: { fontSize: 10, color: '#6b7280', marginTop: 2 },
-  reviewText: { fontSize: 13, color: '#374151', lineHeight: 19 },
-  reviewFooter: { flexDirection: 'row' },
-  repliedTag: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  repliedTxt: { fontSize: 11, color: '#2d7a47', fontWeight: '600' },
-  replyBtn: {
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  replyBtnTxt: { fontSize: 11, fontWeight: '600', color: '#374151' },
+    reviewList: { padding: 16, gap: 12 },
+    reviewCard: {
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      gap: 10,
+    },
+    reviewHeader: { flexDirection: 'row', gap: 10 },
+    reviewAvatar: {
+      width: 38, height: 38,
+      borderRadius: 19,
+      backgroundColor: '#2d7a47',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    reviewAvatarTxt: { fontSize: 11, fontWeight: '700', color: '#fff' },
+    reviewBuyer: { fontSize: 13, fontWeight: '700', color: c.text },
+    reviewDate: { fontSize: 11, color: c.textFaint },
+    reviewProduct: { fontSize: 10, color: c.textMuted, marginTop: 2 },
+    reviewText: { fontSize: 13, color: c.textSub, lineHeight: 19 },
+    reviewFooter: { flexDirection: 'row' },
+    repliedTag: {
+      backgroundColor: c.primaryBg,
+      borderRadius: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+    },
+    repliedTxt: { fontSize: 11, color: '#2d7a47', fontWeight: '600' },
+    replyBtn: {
+      borderRadius: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderWidth: 1,
+      borderColor: c.borderMid,
+    },
+    replyBtnTxt: { fontSize: 11, fontWeight: '600', color: c.textSub },
 
-  syncNote: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#f9fafb',
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'flex-start',
-  },
-  syncNoteTxt: { flex: 1, fontSize: 11, color: '#6b7280', lineHeight: 16 },
-});
+    syncNote: {
+      flexDirection: 'row',
+      gap: 8,
+      backgroundColor: c.bgScreen,
+      borderRadius: 10,
+      padding: 12,
+      alignItems: 'flex-start',
+    },
+    syncNoteTxt: { flex: 1, fontSize: 11, color: c.textMuted, lineHeight: 16 },
+  });
+}
