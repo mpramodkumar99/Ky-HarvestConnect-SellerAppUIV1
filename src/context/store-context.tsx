@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { SellerType, ShipsTo, SellerRole, MemberStatus, Seller, SocialHandles, CustomDeliveryZone, PendingInvite } from '@/services/user-api';
+import type { SellerType, BusinessType, ShipsTo, SellerRole, MemberStatus, Seller, SocialHandles, CustomDeliveryZone, PendingInvite } from '@/services/user-api';
 import { getSeller, listMembers, getSellersByUser, getUser, getPendingInvites, activateMember, removeMember } from '@/services/user-api';
 import { useAuth } from '@/context/auth-context';
 
@@ -25,6 +25,7 @@ export interface Store {
   verified: boolean;
   fssaiNumber?: string;
   gstNumber?: string;
+  businessType?: BusinessType;
   address?: string;
   socialHandles?: SocialHandles;
   status: 'live' | 'offline';  // store operational status — client-side only
@@ -102,6 +103,7 @@ function mergeLiveSeller(seed: Store, live: Awaited<ReturnType<typeof getSeller>
     verified:           live.verified,
     fssaiNumber:        live.fssaiNumber,
     gstNumber:          live.gstNumber,
+    businessType:       live.businessType,
   };
 }
 
@@ -275,10 +277,10 @@ export const ROLE_CONFIG: Record<SellerRole, { label: string; bg: string; color:
 };
 
 export const DELIVERY_ZONE_CONFIG: Record<ShipsTo, { label: string; icon: string; bg: string; text: string }> = {
-  mandal:   { label: 'Local Mandal',  icon: '🏘️', bg: '#f3f4f6', text: '#374151' },
-  district: { label: 'District Wide', icon: '🏙️', bg: '#fef3c7', text: '#92400e' },
-  state:    { label: 'State Wide',    icon: '🗺️', bg: '#dbeafe', text: '#1e40af' },
-  national: { label: 'All India',     icon: '🇮🇳', bg: '#dcfce7', text: '#166534' },
+  mandal:   { label: 'Local Area Wide',  icon: '🏘️', bg: '#f3f4f6', text: '#374151' },
+  district: { label: 'District Wide',    icon: '🏙️', bg: '#fef3c7', text: '#92400e' },
+  state:    { label: 'State Wide',       icon: '🗺️', bg: '#dbeafe', text: '#1e40af' },
+  national: { label: 'All India',        icon: '🇮🇳', bg: '#dcfce7', text: '#166534' },
 };
 
 export const SELLER_TYPE_CONFIG: Record<SellerType, { label: string; icon: string; category: string }> = {
@@ -287,6 +289,7 @@ export const SELLER_TYPE_CONFIG: Record<SellerType, { label: string; icon: strin
   dairy:    { label: 'Dairy',     icon: '🥛', category: 'Dairy & Animal Products' },
   homefood: { label: 'Home Food', icon: '🍱', category: 'Home Foods & Pickles' },
   trades:   { label: 'Trades',    icon: '🔧', category: 'Services & Trades' },
+  kirana:   { label: 'Kirana',    icon: '🏪', category: 'Grocery & General Store' },
 };
 
 // Converts a UserSvc Seller response into a Store UI object.
@@ -310,6 +313,7 @@ export function sellerToStore(seller: Seller, role: SellerRole = 'owner'): Store
     verified:           seller.verified,
     fssaiNumber:   seller.fssaiNumber,
     gstNumber:     seller.gstNumber,
+    businessType:  seller.businessType,
     address:       seller.address,
     socialHandles: seller.socialHandles,
     status:        'live',

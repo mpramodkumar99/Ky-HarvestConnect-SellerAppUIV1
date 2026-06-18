@@ -132,3 +132,16 @@ export const MANDALS_BY_DISTRICT: Record<string, string[]> = {
     'Veldanda', 'Wanaparthy',
   ],
 };
+
+// Reverse-lookup maps derived from the above — built once at module load
+export const DISTRICT_BY_MANDAL: Record<string, string> = Object.fromEntries(
+  Object.entries(MANDALS_BY_DISTRICT).flatMap(([district, mandals]) =>
+    mandals.map(m => [m, district])
+  )
+);
+
+export const STATE_BY_DISTRICT: Record<string, string> = Object.fromEntries(
+  Object.entries(DISTRICTS_BY_STATE).flatMap(([state, districts]) =>
+    districts.map(d => [d, state])
+  )
+);

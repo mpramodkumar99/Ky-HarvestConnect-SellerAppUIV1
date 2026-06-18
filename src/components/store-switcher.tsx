@@ -24,6 +24,7 @@ export function StoreSwitcher({ visible, onClose }: Props) {
     <>
     <CreateStoreModal
       visible={createOpen}
+      existingTypes={stores.map(s => s.type)}
       onCreated={(store) => {
         addStore(store);
         setCreateOpen(false);

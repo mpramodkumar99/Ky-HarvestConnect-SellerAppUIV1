@@ -7,10 +7,13 @@ import { Image } from 'expo-image';
 
 import {
   CatalogProduct, CreateProductInput, Category, SubCategory,
-  CATEGORIES, SUB_CATEGORIES_BY_CATEGORY, SHIPS_TO_OPTIONS, COMMON_UNITS,
-  LOW_STOCK_THRESHOLD,
+  CATEGORIES, SUB_CATEGORIES_BY_CATEGORY, CATEGORIES_BY_SELLER_TYPE,
+  SHIPS_TO_OPTIONS, COMMON_UNITS, LOW_STOCK_THRESHOLD,
   createProduct, updateProduct,
 } from '@/services/catalog-api';
+import type { SellerType, ShipsTo } from '@/services/user-api';
+import { lookupPincode, type PincodeInfo } from '@/utils/pincode';
+import { DELIVERY_ZONE_CONFIG } from '@/context/store-context';
 import { useStore } from '@/context/store-context';
 import { useToast } from '@/components/toast-provider';
 import { useLanguage } from '@/context/language-context';
@@ -21,6 +24,7 @@ const MAX_IMAGES = 5;
 
 interface Props {
   visible: boolean;
+  storeType: SellerType;
   onClose: () => void;
   onSaved: (product: CatalogProduct) => void;
   editProduct?: CatalogProduct;
@@ -38,6 +42,8 @@ interface FormState {
   unit: string;
   shipsTo: 'mandal' | 'district' | 'state' | 'national';
   isHandmade: boolean;
+  minimumOrderQty: string;
+  customArea: boolean;
   images: string[];
   status: 'active' | 'draft';
 }
@@ -54,6 +60,8 @@ const defaultForm = (): FormState => ({
   unit: 'kg',
   shipsTo: 'district',
   isHandmade: false,
+  minimumOrderQty: '',
+  customArea: false,
   images: [],
   status: 'active',
 });
@@ -71,6 +79,8 @@ function formFromProduct(p: CatalogProduct): FormState {
     unit: p.unit,
     shipsTo: p.shipsTo,
     isHandmade: p.isHandmade,
+    minimumOrderQty: p.minimumOrderQty ? String(p.minimumOrderQty) : '',
+    customArea: false,
     images: p.images ?? [],
     status: p.status === 'archived' ? 'draft' : p.status,
   };
@@ -80,13 +90,34 @@ function isLocalUri(uri: string): boolean {
   return uri.startsWith('file://') || uri.startsWith('content://');
 }
 
-export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Props) {
+export function ProductFormModal({ visible, storeType, onClose, onSaved, editProduct }: Props) {
   const { activeStore } = useStore();
   const { showToast } = useToast();
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
   const isEdit = !!editProduct;
+
+  const allowedCategories = CATEGORIES.filter(c =>
+    (CATEGORIES_BY_SELLER_TYPE[storeType] ?? CATEGORIES.map(c => c.value)).includes(c.value)
+  );
+  const isWholesale = storeType === 'kirana' && activeStore.businessType === 'wholesale';
+
+  const [pincodeInfo, setPincodeInfo] = useState<PincodeInfo | null>(null);
+  useEffect(() => {
+    if (activeStore.pincode) lookupPincode(activeStore.pincode).then(setPincodeInfo);
+  }, [activeStore.pincode]);
+
+  function shipsToLabel(zone: ShipsTo): string {
+    if (pincodeInfo) {
+      if (zone === 'mandal')   return `${pincodeInfo.name} Area Wide`;
+      if (zone === 'district') return `${pincodeInfo.district} District Wide`;
+      if (zone === 'state')    return `${pincodeInfo.state} State Wide`;
+    }
+    return DELIVERY_ZONE_CONFIG[zone].label;
+  }
+
+  const hasCustomZone = !!activeStore.customDeliveryZone;
 
   const [form, setForm] = useState<FormState>(defaultForm());
   const [saving, setSaving] = useState(false);
@@ -96,7 +127,13 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
 
   useEffect(() => {
     if (visible) {
-      setForm(isEdit && editProduct ? formFromProduct(editProduct) : defaultForm());
+      if (isEdit && editProduct) {
+        setForm(formFromProduct(editProduct));
+      } else {
+        const firstCat = allowedCategories[0]?.value ?? 'farm_products';
+        const firstSub = SUB_CATEGORIES_BY_CATEGORY[firstCat][0].value;
+        setForm({ ...defaultForm(), category: firstCat, subCategory: firstSub });
+      }
       setError(null);
       setNewImageUrl('');
     }
@@ -162,12 +199,20 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
       sellerName:         activeStore.name,
       location:           activeStore.location,
       isHandmade:         form.isHandmade,
-      shipsTo:            form.shipsTo,
+      shipsTo:            form.customArea
+        ? (activeStore.customDeliveryZone?.mandals?.length   ? 'mandal'
+          : activeStore.customDeliveryZone?.districts?.length ? 'district'
+          : activeStore.customDeliveryZone?.states?.length    ? 'state'
+          : 'district')
+        : form.shipsTo,
       images:             form.images,
       status:             form.status,
       rating:             editProduct?.rating ?? 0,
       reviewCount:        editProduct?.reviewCount ?? 0,
       lowStockThreshold:  isNaN(threshold) || threshold < 0 ? LOW_STOCK_THRESHOLD : threshold,
+      ...(isWholesale && form.minimumOrderQty
+        ? { minimumOrderQty: parseInt(form.minimumOrderQty, 10) || 1 }
+        : {}),
     };
 
     try {
@@ -259,7 +304,7 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
               <View style={s.field}>
                 <Text style={s.label}>{t('product_form_category')} <Text style={s.required}>*</Text></Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-                  {CATEGORIES.map((cat) => (
+                  {allowedCategories.map((cat) => (
                     <Pressable
                       key={cat.value}
                       style={[s.chip, form.category === cat.value && s.chipActive]}
@@ -357,6 +402,25 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
                 </View>
               </View>
 
+              {/* Minimum Order Quantity — wholesale kirana only */}
+              {isWholesale && (
+                <View style={s.field}>
+                  <Text style={s.label}>{t('product_form_moq_label')}</Text>
+                  <Text style={s.fieldHint}>Buyers must order at least this many units</Text>
+                  <View style={s.thresholdRow}>
+                    <TextInput
+                      style={[s.input, s.thresholdInput]}
+                      placeholder="e.g. 25"
+                      placeholderTextColor={c.textFaint}
+                      keyboardType="numeric"
+                      value={form.minimumOrderQty}
+                      onChangeText={(v) => setField('minimumOrderQty', v.replace(/[^0-9]/g, ''))}
+                    />
+                    <Text style={s.thresholdSuffix}>units</Text>
+                  </View>
+                </View>
+              )}
+
               {/* Unit */}
               <View style={s.field}>
                 <Text style={s.label}>{t('product_form_unit')} <Text style={s.required}>*</Text></Text>
@@ -382,19 +446,41 @@ export function ProductFormModal({ visible, onClose, onSaved, editProduct }: Pro
 
               {/* Ships To */}
               <View style={s.field}>
-                <Text style={s.label}>{t('product_form_delivery')} <Text style={s.required}>*</Text></Text>
-                <View style={s.shipsRow}>
-                  {SHIPS_TO_OPTIONS.map((opt) => (
+                <View style={s.fieldHeaderRow}>
+                  <Text style={s.label}>{t('product_form_delivery')} <Text style={s.required}>*</Text></Text>
+                  {hasCustomZone && (
                     <Pressable
-                      key={opt.value}
-                      style={[s.shipsChip, form.shipsTo === opt.value && s.chipActive]}
-                      onPress={() => setField('shipsTo', opt.value)}>
-                      <Text style={[s.chipTxt, form.shipsTo === opt.value && s.chipTxtActive]}>
-                        {opt.label}
+                      style={[s.customAreaBtn, form.customArea && s.customAreaBtnActive]}
+                      onPress={() => setField('customArea', !form.customArea)}>
+                      <Text style={[s.customAreaBtnTxt, form.customArea && s.customAreaBtnTxtActive]}>
+                        {t('product_form_custom_area')}
                       </Text>
                     </Pressable>
-                  ))}
+                  )}
                 </View>
+                {form.customArea ? (
+                  <View style={s.customAreaNote}>
+                    <Text style={s.customAreaNoteTitle}>{t('product_form_custom_area_title')}</Text>
+                    <Text style={s.customAreaNoteDesc}>{t('product_form_custom_area_desc')}</Text>
+                  </View>
+                ) : (
+                  <View style={s.shipsRow}>
+                    {SHIPS_TO_OPTIONS.map((opt) => {
+                      const order: ShipsTo[] = ['mandal', 'district', 'state', 'national'];
+                      const implied = order.indexOf(opt.value as ShipsTo) <= order.indexOf(form.shipsTo);
+                      return (
+                        <Pressable
+                          key={opt.value}
+                          style={[s.shipsChip, implied && s.chipActive]}
+                          onPress={() => setField('shipsTo', opt.value as ShipsTo)}>
+                          <Text style={[s.chipTxt, implied && s.chipTxtActive]}>
+                            {shipsToLabel(opt.value as ShipsTo)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
 
               {/* Images */}
@@ -631,6 +717,22 @@ function makeStyles(c: AppColors) {
       borderWidth: 1,
       borderColor: c.border,
     },
+
+    fieldHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+    customAreaBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: c.border, backgroundColor: c.bgSubtle },
+    customAreaBtnActive: { backgroundColor: '#1e40af', borderColor: '#1e40af' },
+    customAreaBtnTxt: { fontSize: 12, color: c.textSecondary },
+    customAreaBtnTxtActive: { color: '#fff' },
+    customAreaNote: {
+      borderWidth: 1,
+      borderStyle: 'dashed' as const,
+      borderColor: '#1e40af',
+      borderRadius: 8,
+      padding: 12,
+      backgroundColor: '#eff6ff',
+    },
+    customAreaNoteTitle: { fontSize: 13, fontWeight: '600', color: '#1e40af', marginBottom: 2 },
+    customAreaNoteDesc: { fontSize: 12, color: '#3b82f6' },
 
     shipsRow: { flexDirection: 'row', gap: 8 },
     shipsChip: {

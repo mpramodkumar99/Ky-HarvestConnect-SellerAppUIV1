@@ -55,7 +55,8 @@ export interface CatalogProduct {
   status: ProductStatus;
   rating: number;
   reviewCount: number;
-  lowStockThreshold?: number; // seller-set; falls back to LOW_STOCK_THRESHOLD if absent
+  lowStockThreshold?: number;  // seller-set; falls back to LOW_STOCK_THRESHOLD if absent
+  minimumOrderQty?: number;    // wholesale MOQ — buyers must order at least this quantity
   createdAt: string;
   updatedAt: string;
 }
@@ -103,6 +104,15 @@ export const SUB_CATEGORIES_BY_CATEGORY: Record<Category, { value: SubCategory; 
     { value: 'mechanical',             label: 'Mechanical' },
     { value: 'rentals',                label: 'Rentals' },
   ],
+};
+
+export const CATEGORIES_BY_SELLER_TYPE: Record<string, Category[]> = {
+  farmer:   ['farm_products', 'processed_foods', 'foods'],
+  dairy:    ['farm_products', 'processed_foods', 'foods'],
+  homefood: ['processed_foods', 'foods'],
+  artisan:  ['arts_handmade'],
+  trades:   ['arts_handmade', 'services'],
+  kirana:   ['farm_products', 'processed_foods', 'foods', 'arts_handmade'],
 };
 
 export const SHIPS_TO_OPTIONS: { value: ShipsTo; label: string }[] = [

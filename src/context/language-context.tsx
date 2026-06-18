@@ -551,7 +551,7 @@ const EN = {
   kyc_verified_sub:      'Your account is verified and fully eligible for payouts.',
   kyc_pending_sub:       'Submit your FSSAI number and supporting documents. Admin reviews within 48 hours.',
   kyc_fssai_label:       'FSSAI License Number',
-  kyc_fssai_hint:        '14-digit number from your FSSAI food license certificate',
+  kyc_fssai_hint:        '14-digit number from your FSSAI food license certificate  e.g. 36214500000001',
   kyc_docs_label:        'Supporting Documents',
   kyc_no_docs:           'No documents uploaded yet',
   kyc_doc_url_ph:        'Paste document URL (Google Drive, Dropbox…)',
@@ -595,6 +595,31 @@ const EN = {
   promo_created_toast:   'Promotion created!',
   promo_removed_toast:   'Promotion removed.',
   promo_sync_note:       'Promotions are session-only for now. Persistent management will be available once the promotions service is live.',
+
+  // Kirana business model toggle
+  create_store_business_model:    'Business Model',
+  create_store_retail:            'Retail',
+  create_store_retail_sub:        'Sells to consumers',
+  create_store_wholesale:         'Wholesale',
+  create_store_wholesale_sub:     'Bulk to shops / resellers',
+
+  // Custom delivery area (create-store)
+  create_store_custom_area_on:    '✕ Custom Area',
+  create_store_custom_area_off:   '+ Custom Area',
+  create_store_custom_area_title: 'Custom Delivery Area Selected',
+  create_store_custom_area_desc:  'You can define specific mandals, districts, pincodes and states from Store Settings after creation.',
+
+  // Duplicate store type warning
+  create_store_dup_title_prefix:  'You already have a',
+  create_store_dup_title_suffix:  'store',
+  create_store_dup_desc:          'Creating another one is allowed, but consider using your existing store instead. Are you sure?',
+  create_store_dup_confirm:       'Create Anyway',
+
+  // Product form — new fields
+  product_form_moq_label:         'Minimum Order Quantity (MOQ)',
+  product_form_custom_area:       'Custom Area',
+  product_form_custom_area_title: 'Custom Delivery Area',
+  product_form_custom_area_desc:  "Ships to your store's custom delivery area",
 };
 
 const TE: typeof EN = {
@@ -1187,6 +1212,31 @@ const TE: typeof EN = {
   promo_created_toast:   'ప్రమోషన్ సృష్టించబడింది!',
   promo_removed_toast:   'ప్రమోషన్ తొలగించబడింది.',
   promo_sync_note:       'ప్రమోషన్లు ప్రస్తుతం సెషన్ మాత్రమే. ప్రమోషన్ సేవ ప్రారంభమైన తర్వాత శాశ్వత నిర్వహణ అందుబాటులోకి వస్తుంది.',
+
+  // Kirana business model toggle
+  create_store_business_model:    'వ్యాపార నమూనా',
+  create_store_retail:            'రిటైల్',
+  create_store_retail_sub:        'వినియోగదారులకు అమ్మకం',
+  create_store_wholesale:         'హోల్‌సేల్',
+  create_store_wholesale_sub:     'దుకాణాలు / రీసెల్లర్‌లకు',
+
+  // Custom delivery area (create-store)
+  create_store_custom_area_on:    '✕ కస్టమ్ ప్రాంతం',
+  create_store_custom_area_off:   '+ కస్టమ్ ప్రాంతం',
+  create_store_custom_area_title: 'కస్టమ్ డెలివరీ ప్రాంతం ఎంపిక చేయబడింది',
+  create_store_custom_area_desc:  'స్టోర్ సృష్టి తర్వాత స్టోర్ సెట్టింగ్‌ల నుండి నిర్దిష్ట మండలాలు, జిల్లాలు, పిన్‌కోడ్‌లు మరియు రాష్ట్రాలు నిర్వచించవచ్చు.',
+
+  // Duplicate store type warning
+  create_store_dup_title_prefix:  'మీకు ఇప్పటికే ఒక',
+  create_store_dup_title_suffix:  'స్టోర్ ఉంది',
+  create_store_dup_desc:          'మరో స్టోర్ సృష్టించడం అనుమతించబడుతుంది, కానీ మీ ప్రస్తుత స్టోర్‌ని వాడటం పరిగణించండి. మీకు ఖచ్చితంగా ఉందా?',
+  create_store_dup_confirm:       'అయినా సృష్టించు',
+
+  // Product form — new fields
+  product_form_moq_label:         'కనీస ఆర్డర్ పరిమాణం (MOQ)',
+  product_form_custom_area:       'కస్టమ్ ప్రాంతం',
+  product_form_custom_area_title: 'కస్టమ్ డెలివరీ ప్రాంతం',
+  product_form_custom_area_desc:  'మీ స్టోర్ యొక్క కస్టమ్ డెలివరీ ప్రాంతానికి పంపుతుంది',
 };
 
 const HI: typeof EN = {
@@ -1779,6 +1829,31 @@ const HI: typeof EN = {
   promo_created_toast:   'प्रमोशन बनाया गया!',
   promo_removed_toast:   'प्रमोशन हटाया गया।',
   promo_sync_note:       'प्रमोशन अभी के लिए केवल सत्र तक हैं। प्रमोशन सेवा लाइव होने पर स्थायी प्रबंधन उपलब्ध होगा।',
+
+  // Kirana business model toggle
+  create_store_business_model:    'व्यापार मॉडल',
+  create_store_retail:            'खुदरा',
+  create_store_retail_sub:        'उपभोक्ताओं को बेचता है',
+  create_store_wholesale:         'थोक',
+  create_store_wholesale_sub:     'दुकानों / पुनर्विक्रेताओं को थोक',
+
+  // Custom delivery area (create-store)
+  create_store_custom_area_on:    '✕ कस्टम क्षेत्र',
+  create_store_custom_area_off:   '+ कस्टम क्षेत्र',
+  create_store_custom_area_title: 'कस्टम डिलीवरी क्षेत्र चुना गया',
+  create_store_custom_area_desc:  'स्टोर बनाने के बाद स्टोर सेटिंग्स से विशिष्ट मंडल, जिले, पिनकोड और राज्य परिभाषित कर सकते हैं।',
+
+  // Duplicate store type warning
+  create_store_dup_title_prefix:  'आपके पास पहले से एक',
+  create_store_dup_title_suffix:  'स्टोर है',
+  create_store_dup_desc:          'एक और बनाना अनुमत है, लेकिन अपने मौजूदा स्टोर का उपयोग करने पर विचार करें। क्या आप सुनिश्चित हैं?',
+  create_store_dup_confirm:       'फिर भी बनाएं',
+
+  // Product form — new fields
+  product_form_moq_label:         'न्यूनतम ऑर्डर मात्रा (MOQ)',
+  product_form_custom_area:       'कस्टम क्षेत्र',
+  product_form_custom_area_title: 'कस्टम डिलीवरी क्षेत्र',
+  product_form_custom_area_desc:  'आपके स्टोर के कस्टम डिलीवरी क्षेत्र में भेजता है',
 };
 
 const STRINGS: Record<Language, typeof EN> = { en: EN, te: TE, hi: HI };

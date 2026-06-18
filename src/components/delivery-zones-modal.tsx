@@ -8,7 +8,7 @@ import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import type { ShipsTo } from '@/services/user-api';
 import { INDIA_STATES, DISTRICTS_BY_STATE, MANDALS_BY_DISTRICT } from '@/data/india-geo';
-import { lookupPincode, parseRawPincodes } from '@/utils/pincode';
+import { lookupPincode, parseRawPincodes, type PincodeInfo } from '@/utils/pincode';
 
 const ZONE_ORDER: ShipsTo[] = ['mandal', 'district', 'state', 'national'];
 
@@ -26,11 +26,21 @@ interface Props {
   sellerId: string;
   currentZones: ShipsTo[];
   currentCustomZone?: CustomDeliveryZone;
+  storePincodeInfo?: PincodeInfo;
   onClose: () => void;
   onUpdated: () => void;
 }
 
-export function DeliveryZonesModal({ visible, sellerId, currentZones, currentCustomZone, onClose, onUpdated }: Props) {
+function zoneLabel(zone: ShipsTo, info?: PincodeInfo): string {
+  if (info) {
+    if (zone === 'mandal')   return `${info.name} Area Wide`;
+    if (zone === 'district') return `${info.district} District Wide`;
+    if (zone === 'state')    return `${info.state} State Wide`;
+  }
+  return DELIVERY_ZONE_CONFIG[zone].label;
+}
+
+export function DeliveryZonesModal({ visible, sellerId, currentZones, currentCustomZone, storePincodeInfo, onClose, onUpdated }: Props) {
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
@@ -234,7 +244,8 @@ export function DeliveryZonesModal({ visible, sellerId, currentZones, currentCus
 
             {/* Standard zone tiles — hidden when custom mode is active */}
             {!customMode && ZONE_ORDER.map((zone) => {
-              const zc = DELIVERY_ZONE_CONFIG[zone];
+              const zc     = DELIVERY_ZONE_CONFIG[zone];
+              const label  = zoneLabel(zone, storePincodeInfo);
               const active = selected.includes(zone);
               return (
                 <Pressable
@@ -246,7 +257,7 @@ export function DeliveryZonesModal({ visible, sellerId, currentZones, currentCus
                     <Text style={{ fontSize: 22 }}>{zc.icon}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.zoneName, active && s.zoneNameActive]}>{zc.label}</Text>
+                    <Text style={[s.zoneName, active && s.zoneNameActive]}>{label}</Text>
                     <Text style={s.zoneSub}>{ZONE_DESC[zone]}</Text>
                   </View>
                   <View style={[s.checkbox, active && s.checkboxActive]}>

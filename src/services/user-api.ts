@@ -9,7 +9,8 @@ const BASE_URL = Platform.OS === 'android'
 // ── Types (mirror HC_UserSvc/src/types.ts) ────────────────────────────────────
 
 export type UserType   = 'buyer' | 'seller';
-export type SellerType = 'farmer' | 'artisan' | 'dairy' | 'homefood' | 'trades';
+export type SellerType    = 'farmer' | 'artisan' | 'dairy' | 'homefood' | 'trades' | 'kirana';
+export type BusinessType  = 'wholesale' | 'retail';
 export type ShipsTo    = 'mandal' | 'district' | 'state' | 'national';
 export type SellerRole   = 'owner' | 'manager' | 'staff';
 export type MemberStatus = 'active' | 'pending';
@@ -83,6 +84,7 @@ export interface Seller {
   deliveryZones: ShipsTo[];
   fssaiNumber?: string;
   gstNumber?: string;
+  businessType?: BusinessType;
   socialHandles?: SocialHandles;
   customDeliveryZone?: CustomDeliveryZone;
   verified: boolean;
