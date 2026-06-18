@@ -3,7 +3,7 @@ import {
   Modal, View, Text, TextInput, Pressable, StyleSheet,
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import type { SellerType, ShipsTo } from '@/services/user-api';
+import type { SellerType, BusinessType, ShipsTo } from '@/services/user-api';
 import { createSeller } from '@/services/user-api';
 import { sellerToStore, SELLER_TYPE_CONFIG, DELIVERY_ZONE_CONFIG, type Store } from '@/context/store-context';
 import { useAuth } from '@/context/auth-context';
@@ -15,34 +15,47 @@ interface Props {
   visible: boolean;
   onCreated: (store: Store) => void;
   onClose: () => void;
+  existingTypes?: SellerType[];
 }
 
-const SELLER_TYPES: SellerType[] = ['farmer', 'dairy', 'homefood', 'artisan', 'trades'];
+const SELLER_TYPES: SellerType[] = ['farmer', 'dairy', 'homefood', 'artisan', 'trades', 'kirana'];
 const DELIVERY_ZONES: ShipsTo[]  = ['mandal', 'district', 'state', 'national'];
 
-export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
+function zoneLabel(zone: ShipsTo, info?: PincodeInfo | null): string {
+  if (info) {
+    if (zone === 'mandal')   return `${info.name} Area Wide`;
+    if (zone === 'district') return `${info.district} District Wide`;
+    if (zone === 'state')    return `${info.state} State Wide`;
+  }
+  return DELIVERY_ZONE_CONFIG[zone].label;
+}
+
+export function CreateStoreModal({ visible, onCreated, onClose, existingTypes = [] }: Props) {
   const { session } = useAuth();
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
   const [name,         setName]         = useState('');
   const [type,         setType]         = useState<SellerType>('farmer');
+  const [businessType, setBusinessType] = useState<BusinessType>('retail');
   const [phone,        setPhone]        = useState('');
   const [location,     setLocation]     = useState('');
   const [pincode,      setPincode]      = useState('');
   const [description,  setDescription]  = useState('');
   const [fssaiNumber,  setFssaiNumber]  = useState('');
   const [zones,        setZones]        = useState<ShipsTo[]>([]);
+  const [customAreaMode, setCustomAreaMode] = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [error,        setError]        = useState('');
   const [pincodeInfo,  setPincodeInfo]  = useState<PincodeInfo | null>(null);
   const [pincodeLoading, setPincodeLoading] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
-    setName(''); setType('farmer'); setPhone(''); setLocation('');
+    setName(''); setType('farmer'); setBusinessType('retail'); setPhone(''); setLocation('');
     setPincode(''); setDescription(''); setFssaiNumber(''); setZones([]);
-    setError(''); setPincodeInfo(null);
+    setCustomAreaMode(false); setError(''); setPincodeInfo(null); setDuplicateWarning(false);
   }, [visible]);
 
   useEffect(() => {
@@ -57,7 +70,12 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
   }, [pincode]);
 
   function toggleZone(zone: ShipsTo) {
-    setZones(prev => prev.includes(zone) ? prev.filter(z => z !== zone) : [...prev, zone]);
+    const idx = DELIVERY_ZONES.indexOf(zone);
+    setZones(prev =>
+      prev.includes(zone)
+        ? DELIVERY_ZONES.slice(0, idx)          // deselect this + all broader zones above
+        : DELIVERY_ZONES.slice(0, idx + 1)      // select this + all more granular zones below
+    );
   }
 
   function normalizePhone(raw: string): string {
@@ -67,7 +85,7 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
     return raw;
   }
 
-  async function handleSave() {
+  async function handleSave(bypassDuplicateCheck = false) {
     setError('');
     const normalizedPhone = normalizePhone(phone.trim());
 
@@ -75,7 +93,12 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
     if (!/^\+91[6-9]\d{9}$/.test(normalizedPhone)){ setError(t('create_store_err_phone')); return; }
     if (!location.trim())                          { setError(t('create_store_err_location')); return; }
     if (!/^\d{6}$/.test(pincode))                  { setError(t('create_store_err_pincode')); return; }
-    if (zones.length === 0)                        { setError(t('create_store_err_zones')); return; }
+    if (!customAreaMode && zones.length === 0)      { setError(t('create_store_err_zones')); return; }
+
+    if (!bypassDuplicateCheck && existingTypes.includes(type)) {
+      setDuplicateWarning(true);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -89,6 +112,7 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
         deliveryZones: zones,
         description:   description.trim() || undefined,
         fssaiNumber:   fssaiNumber.trim() || undefined,
+        ...(type === 'kirana' ? { businessType } : {}),
       });
       onCreated(sellerToStore(seller, 'owner'));
     } catch (e) {
@@ -145,6 +169,29 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
                 );
               })}
             </ScrollView>
+
+            {/* Wholesale / Retail toggle — kirana only */}
+            {type === 'kirana' && (
+              <View style={{ marginBottom: 18 }}>
+                <Text style={s.fieldLabel}>{t('create_store_business_model')} <Text style={s.required}>*</Text></Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+                  {(['retail', 'wholesale'] as BusinessType[]).map(bt => (
+                    <Pressable
+                      key={bt}
+                      style={[s.typeChip, businessType === bt && s.typeChipActive, { flex: 1, justifyContent: 'center' }]}
+                      onPress={() => setBusinessType(bt)}>
+                      <Text style={s.typeChipIcon}>{bt === 'retail' ? '🛍️' : '📦'}</Text>
+                      <Text style={[s.typeChipLabel, businessType === bt && s.typeChipLabelActive]}>
+                        {bt === 'retail' ? t('create_store_retail') : t('create_store_wholesale')}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: businessType === bt ? '#fff' : c.textFaint, textAlign: 'center', marginTop: 2 }}>
+                        {bt === 'retail' ? t('create_store_retail_sub') : t('create_store_wholesale_sub')}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
 
             {/* Store Name */}
             <Field label={t('create_store_name')} required c={c}>
@@ -217,25 +264,44 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
             )}
 
             {/* Delivery Zones */}
-            <Text style={s.fieldLabel}>{t('create_store_zones')} <Text style={s.required}>*</Text></Text>
-            <View style={s.zoneGrid}>
-              {DELIVERY_ZONES.map(zone => {
-                const zc = DELIVERY_ZONE_CONFIG[zone];
-                const checked = zones.includes(zone);
-                return (
-                  <Pressable
-                    key={zone}
-                    style={[s.zoneChip, checked && { backgroundColor: zc.bg, borderColor: zc.text + '60' }]}
-                    onPress={() => toggleZone(zone)}>
-                    <Text style={s.zoneChipIcon}>{zc.icon}</Text>
-                    <Text style={[s.zoneChipLabel, checked && { color: zc.text, fontWeight: '700' }]}>
-                      {zc.label}
-                    </Text>
-                    {checked && <Text style={[s.zoneCheck, { color: zc.text }]}>✓</Text>}
-                  </Pressable>
-                );
-              })}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={s.fieldLabel}>{t('create_store_zones')} <Text style={s.required}>*</Text></Text>
+              <Pressable
+                onPress={() => { setCustomAreaMode(m => !m); setZones([]); }}
+                style={[s.customAreaBtn, customAreaMode && s.customAreaBtnActive]}>
+                <Text style={[s.customAreaBtnTxt, customAreaMode && s.customAreaBtnTxtActive]}>
+                  {customAreaMode ? t('create_store_custom_area_on') : t('create_store_custom_area_off')}
+                </Text>
+              </Pressable>
             </View>
+
+            {customAreaMode ? (
+              <View style={s.customAreaNote}>
+                <Text style={{ fontSize: 22, marginBottom: 6 }}>📍</Text>
+                <Text style={[s.customAreaNoteTitle]}>{t('create_store_custom_area_title')}</Text>
+                <Text style={s.customAreaNoteDesc}>{t('create_store_custom_area_desc')}</Text>
+              </View>
+            ) : (
+              <View style={s.zoneGrid}>
+                {DELIVERY_ZONES.map(zone => {
+                  const zc      = DELIVERY_ZONE_CONFIG[zone];
+                  const checked = zones.includes(zone);
+                  const label   = zoneLabel(zone, pincodeInfo);
+                  return (
+                    <Pressable
+                      key={zone}
+                      style={[s.zoneChip, checked && { backgroundColor: zc.bg, borderColor: zc.text + '60' }]}
+                      onPress={() => toggleZone(zone)}>
+                      <Text style={s.zoneChipIcon}>{zc.icon}</Text>
+                      <Text style={[s.zoneChipLabel, checked && { color: zc.text, fontWeight: '700' }]}>
+                        {label}
+                      </Text>
+                      {checked && <Text style={[s.zoneCheck, { color: zc.text }]}>✓</Text>}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
 
             {/* Description */}
             <Field label={t('create_store_desc')} hint={t('create_store_desc_hint')} c={c}>
@@ -271,11 +337,29 @@ export function CreateStoreModal({ visible, onCreated, onClose }: Props) {
               </View>
             ) : null}
 
+            {/* Duplicate type warning */}
+            {duplicateWarning && (
+              <View style={s.dupWarningBox}>
+                <Text style={s.dupWarningTitle}>
+                  {t('create_store_dup_title_prefix')} {SELLER_TYPE_CONFIG[type].icon} {SELLER_TYPE_CONFIG[type].label} {t('create_store_dup_title_suffix')}
+                </Text>
+                <Text style={s.dupWarningDesc}>{t('create_store_dup_desc')}</Text>
+                <View style={s.dupWarningActions}>
+                  <Pressable style={s.dupCancelBtn} onPress={() => setDuplicateWarning(false)}>
+                    <Text style={s.dupCancelTxt}>{t('payout_cancel')}</Text>
+                  </Pressable>
+                  <Pressable style={s.dupConfirmBtn} onPress={() => { setDuplicateWarning(false); handleSave(true); }}>
+                    <Text style={s.dupConfirmTxt}>{t('create_store_dup_confirm')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
             {/* Submit */}
             <Pressable
-              style={[s.saveBtn, saving && s.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={saving}>
+              style={[s.saveBtn, (saving || duplicateWarning) && s.saveBtnDisabled]}
+              onPress={() => handleSave()}
+              disabled={saving || duplicateWarning}>
               {saving
                 ? <ActivityIndicator color="#fff" size="small" />
                 : <Text style={s.saveBtnTxt}>{t('create_store_btn')}</Text>
@@ -376,6 +460,13 @@ function makeStyles(c: AppColors) {
     typeChipLabelActive: { color: c.primaryText },
 
     // Delivery zones
+    customAreaBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: c.primary },
+    customAreaBtnActive: { backgroundColor: c.primary },
+    customAreaBtnTxt: { fontSize: 11, fontWeight: '700', color: c.primary },
+    customAreaBtnTxtActive: { color: '#fff' },
+    customAreaNote: { alignItems: 'center', padding: 20, marginBottom: 18, borderRadius: 12, borderWidth: 1.5, borderColor: c.primary, borderStyle: 'dashed', backgroundColor: c.primaryBg },
+    customAreaNoteTitle: { fontSize: 13, fontWeight: '700', color: c.primaryText, marginBottom: 4 },
+    customAreaNoteDesc: { fontSize: 12, color: c.textMuted, textAlign: 'center', lineHeight: 17 },
     zoneGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 18 },
     zoneChip: {
       flexDirection: 'row',
@@ -422,6 +513,28 @@ function makeStyles(c: AppColors) {
       marginBottom: 12,
     },
     errorText: { fontSize: 13, color: c.errorTextDark },
+
+    dupWarningBox: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: '#f59e0b',
+      backgroundColor: '#fffbeb',
+      padding: 14,
+      marginBottom: 12,
+    },
+    dupWarningTitle: { fontSize: 13, fontWeight: '700', color: '#92400e', marginBottom: 4 },
+    dupWarningDesc:  { fontSize: 12, color: '#b45309', marginBottom: 12, lineHeight: 17 },
+    dupWarningActions: { flexDirection: 'row', gap: 8 },
+    dupCancelBtn: {
+      flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8,
+      borderWidth: 1, borderColor: '#d97706', backgroundColor: '#fff',
+    },
+    dupCancelTxt: { fontSize: 13, color: '#92400e', fontWeight: '600' },
+    dupConfirmBtn: {
+      flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8,
+      backgroundColor: '#d97706',
+    },
+    dupConfirmTxt: { fontSize: 13, color: '#fff', fontWeight: '700' },
 
     saveBtn: {
       backgroundColor: '#2d7a47',

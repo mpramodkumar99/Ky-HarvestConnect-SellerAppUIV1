@@ -28,6 +28,7 @@ import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import { getBankAccount, setBankAccount as saveBankAccount, updateSeller, type BankAccount, type CreateBankAccountInput } from '@/services/user-api';
 import { lookupPincode, type PincodeInfo } from '@/utils/pincode';
+import { DISTRICT_BY_MANDAL, STATE_BY_DISTRICT } from '@/data/india-geo';
 import { listProducts } from '@/services/catalog-api';
 import { listOrders } from '@/services/order-api';
 
@@ -245,6 +246,7 @@ export default function ProfileScreen() {
         sellerId={activeStore.id}
         currentZones={activeStore.deliveryZones}
         currentCustomZone={activeStore.customDeliveryZone}
+        storePincodeInfo={storePincodeInfo ?? undefined}
         onClose={() => setZonesOpen(false)}
         onUpdated={handleStoreUpdated}
       />
@@ -433,19 +435,33 @@ export default function ProfileScreen() {
           <View style={s.coverageBadges}>
             {customZoneData ? (
               <>
-                {(() => {
-                  const items =
-                    customZoneData.mandals.length   > 0 ? customZoneData.mandals.map(m => ({ key: m, label: `📍 ${m}`,  bg: '#f0fdf4', color: '#166534' })) :
-                    customZoneData.districts.length > 0 ? customZoneData.districts.map(d => ({ key: d, label: `🏙️ ${d}`, bg: '#e0f2fe', color: '#0369a1' })) :
-                                                          customZoneData.states.map(st => ({ key: st, label: `🗺️ ${st}`, bg: '#ede9fe', color: '#6d28d9' }));
-                  return items.map(item => (
-                    <View key={item.key} style={[s.coverageBadge, { backgroundColor: item.bg }]}>
-                      <Text style={[s.coverageBadgeTxt, { color: item.color }]}>{item.label}</Text>
+                {customZoneData.states.map(st => (
+                  <View key={`st-${st}`} style={[s.coverageBadge, { backgroundColor: '#ede9fe' }]}>
+                    <Text style={[s.coverageBadgeTxt, { color: '#6d28d9' }]}>🗺️ {st}</Text>
+                  </View>
+                ))}
+                {customZoneData.districts.map(d => {
+                  const parent = STATE_BY_DISTRICT[d];
+                  return (
+                    <View key={`d-${d}`} style={[s.coverageBadge, { backgroundColor: '#e0f2fe' }]}>
+                      <Text style={[s.coverageBadgeTxt, { color: '#0369a1' }]}>
+                        🏙️ {d}{parent ? `, ${parent}` : ''}
+                      </Text>
                     </View>
-                  ));
-                })()}
+                  );
+                })}
+                {customZoneData.mandals.map(m => {
+                  const parent = DISTRICT_BY_MANDAL[m];
+                  return (
+                    <View key={`m-${m}`} style={[s.coverageBadge, { backgroundColor: '#f0fdf4' }]}>
+                      <Text style={[s.coverageBadgeTxt, { color: '#166534' }]}>
+                        📍 {m}{parent ? `, ${parent}` : ''}
+                      </Text>
+                    </View>
+                  );
+                })}
                 {(customZoneData.resolvedPins ?? []).map(rp => (
-                  <View key={rp.pin} style={[s.coverageBadge, { backgroundColor: '#fef9c3' }]}>
+                  <View key={`pin-${rp.pin}`} style={[s.coverageBadge, { backgroundColor: '#fef9c3' }]}>
                     <Text style={[s.coverageBadgeTxt, { color: '#854d0e' }]}>
                       📮 {rp.pin} – {rp.name}, {rp.district}
                     </Text>
@@ -455,9 +471,14 @@ export default function ProfileScreen() {
             ) : activeStore.deliveryZones.length > 0 ? (
               activeStore.deliveryZones.map(zone => {
                 const zc = DELIVERY_ZONE_CONFIG[zone];
+                const label =
+                  zone === 'mandal'   && storePincodeInfo ? `${storePincodeInfo.name} Area Wide` :
+                  zone === 'district' && storePincodeInfo ? `${storePincodeInfo.district} District Wide` :
+                  zone === 'state'    && storePincodeInfo ? `${storePincodeInfo.state} State Wide` :
+                  zc.label;
                 return (
                   <View key={zone} style={[s.coverageBadge, { backgroundColor: zc.bg }]}>
-                    <Text style={[s.coverageBadgeTxt, { color: zc.text }]}>{zc.icon} {zc.label}</Text>
+                    <Text style={[s.coverageBadgeTxt, { color: zc.text }]}>{zc.icon} {label}</Text>
                   </View>
                 );
               })

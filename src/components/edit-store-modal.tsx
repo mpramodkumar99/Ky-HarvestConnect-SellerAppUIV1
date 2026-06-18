@@ -7,9 +7,9 @@ import { SELLER_TYPE_CONFIG, useStore } from '@/context/store-context';
 import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import type { Store } from '@/context/store-context';
-import type { SellerType } from '@/services/user-api';
+import type { SellerType, BusinessType } from '@/services/user-api';
 
-const TYPE_OPTIONS: SellerType[] = ['farmer', 'artisan', 'dairy', 'homefood', 'trades'];
+const TYPE_OPTIONS: SellerType[] = ['farmer', 'artisan', 'dairy', 'homefood', 'trades', 'kirana'];
 
 interface Props {
   visible: boolean;
@@ -23,14 +23,15 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
-  const [name,        setName]        = useState('');
-  const [description, setDescription] = useState('');
-  const [location,    setLocation]    = useState('');
-  const [address,     setAddress]     = useState('');
-  const [type,        setType]        = useState<SellerType>('farmer');
-  const [status,      setStatus]      = useState<'live' | 'offline'>('live');
-  const [loading,     setLoading]     = useState(false);
-  const [error,       setError]       = useState('');
+  const [name,         setName]         = useState('');
+  const [description,  setDescription]  = useState('');
+  const [location,     setLocation]     = useState('');
+  const [address,      setAddress]      = useState('');
+  const [type,         setType]         = useState<SellerType>('farmer');
+  const [businessType, setBusinessType] = useState<BusinessType>('retail');
+  const [status,       setStatus]       = useState<'live' | 'offline'>('live');
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState('');
 
   useEffect(() => {
     if (visible) {
@@ -39,6 +40,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
       setLocation(store.location);
       setAddress(store.address ?? '');
       setType(store.type);
+      setBusinessType(store.businessType ?? 'retail');
       setStatus(store.status);
       setError('');
     }
@@ -57,6 +59,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
         location:    location.trim() || undefined,
         address:     address.trim() || undefined,
         type,
+        ...(type === 'kirana' ? { businessType } : {}),
       });
       updateStoreStatus(store.id, status);
       onUpdated();
@@ -143,7 +146,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
               />
             </View>
 
-            <View style={[s.field, { marginBottom: 8 }]}>
+            <View style={[s.field, { marginBottom: type === 'kirana' ? 12 : 8 }]}>
               <Text style={s.label}>{t('edit_store_type')}</Text>
               <View style={s.typeGrid}>
                 {TYPE_OPTIONS.map((sType) => {
@@ -162,6 +165,32 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
                 })}
               </View>
             </View>
+
+            {type === 'kirana' && (
+              <View style={s.field}>
+                <Text style={s.label}>{t('create_store_business_model')} *</Text>
+                <View style={s.bizModelRow}>
+                  {(['retail', 'wholesale'] as BusinessType[]).map(bt => {
+                    const active = businessType === bt;
+                    return (
+                      <Pressable
+                        key={bt}
+                        style={[s.bizBtn, active && s.bizBtnActive]}
+                        onPress={() => setBusinessType(bt)}
+                        disabled={loading}>
+                        <Text style={s.bizIcon}>{bt === 'retail' ? '🛍️' : '📦'}</Text>
+                        <Text style={[s.bizLabel, active && s.bizLabelActive]}>
+                          {bt === 'retail' ? t('create_store_retail') : t('create_store_wholesale')}
+                        </Text>
+                        <Text style={[s.bizSub, active && s.bizSubActive]}>
+                          {bt === 'retail' ? t('create_store_retail_sub') : t('create_store_wholesale_sub')}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             <View style={s.field}>
               <Text style={s.label}>{t('edit_store_status')}</Text>
@@ -279,6 +308,25 @@ function makeStyles(c: AppColors) {
     typeChipActive: { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
     typeLabel: { fontSize: 12, fontWeight: '600', color: c.textMuted },
     typeLabelActive: { color: c.primaryText },
+
+    bizModelRow: { flexDirection: 'row', gap: 10 },
+    bizBtn: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgScreen,
+      gap: 3,
+    },
+    bizBtnActive: { borderColor: '#2d7a47', backgroundColor: '#2d7a47' },
+    bizIcon:       { fontSize: 24 },
+    bizLabel:      { fontSize: 13, fontWeight: '700', color: c.textSub, textAlign: 'center' },
+    bizLabelActive: { color: '#fff' },
+    bizSub:        { fontSize: 10, color: c.textFaint, textAlign: 'center' },
+    bizSubActive:  { color: 'rgba(255,255,255,0.75)' },
 
     statusRow: { flexDirection: 'row', gap: 10 },
     statusBtn: {

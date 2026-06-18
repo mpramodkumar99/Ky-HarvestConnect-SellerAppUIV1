@@ -7,6 +7,7 @@ import { StoreProvider } from '@/context/store-context';
 import { ToastProvider } from '@/components/toast-provider';
 import { LanguageProvider } from '@/context/language-context';
 import { ThemePreferenceProvider, useThemePreference } from '@/context/theme-context';
+import { OrderAlertProvider } from '@/context/order-alert-context';
 
 function AppWithTheme() {
   const { scheme } = useThemePreference();
@@ -16,8 +17,10 @@ function AppWithTheme() {
         <AuthProvider>
           <StoreProvider>
             <ToastProvider>
-              <AnimatedSplashOverlay />
-              <AppGate />
+              <OrderAlertProvider>
+                <AnimatedSplashOverlay />
+                <AppGate />
+              </OrderAlertProvider>
             </ToastProvider>
           </StoreProvider>
         </AuthProvider>

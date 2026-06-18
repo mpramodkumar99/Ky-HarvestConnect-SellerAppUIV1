@@ -11,6 +11,7 @@ import { DeclineReasonModal } from '@/components/decline-reason-modal';
 import { OrderDetailModal } from '@/components/order-detail-modal';
 import { OrderFilterModal, type OrderFilters } from '@/components/order-filter-modal';
 import { useStore } from '@/context/store-context';
+import { useOrderAlert } from '@/context/order-alert-context';
 import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import {
@@ -21,6 +22,7 @@ import {
 
 export default function OrdersScreen() {
   const { activeStore, setNewOrderCount } = useStore();
+  const { testAlert, stopAlert } = useOrderAlert();
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
@@ -84,6 +86,7 @@ export default function OrdersScreen() {
   }
 
   async function handleAccept(order: Order) {
+    stopAlert();
     setActionLoading(order.id);
     try {
       const updated = await updateOrderStatus(order.id, 'processing');
@@ -124,6 +127,7 @@ export default function OrdersScreen() {
 
   async function handleDeclineConfirm(reason: string) {
     if (!declineOrder) return;
+    stopAlert();
     const target = declineOrder;
     setActionLoading(target.id);
     try {
@@ -193,10 +197,15 @@ export default function OrdersScreen() {
                 {activeStore.name} · {tabCount('new')} {t('orders_new')} · {tabCount('accepted')} {t('orders_accepted')}
               </Text>
             </Pressable>
-            <Pressable style={s.filterBtn} onPress={() => setFilterVisible(true)}>
-              <Text style={{ fontSize: 16 }}>⚙️</Text>
-              {hasActiveFilter && <View style={s.filterDot} />}
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Pressable onPress={testAlert} style={s.filterBtn}>
+                <Text style={{ fontSize: 16 }}>🔔</Text>
+              </Pressable>
+              <Pressable style={s.filterBtn} onPress={() => setFilterVisible(true)}>
+                <Text style={{ fontSize: 16 }}>⚙️</Text>
+                {hasActiveFilter && <View style={s.filterDot} />}
+              </Pressable>
+            </View>
           </View>
         </SafeAreaView>
       </View>

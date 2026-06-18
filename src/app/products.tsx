@@ -304,6 +304,7 @@ export default function ProductsScreen() {
 
       <ProductFormModal
         visible={formOpen}
+        storeType={activeStore.type}
         onClose={() => setFormOpen(false)}
         onSaved={onSaved}
         editProduct={editingProduct}

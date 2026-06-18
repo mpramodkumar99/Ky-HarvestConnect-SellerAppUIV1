@@ -11,13 +11,15 @@ import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 // FSSAI is required only for food/edible seller types
 const EDIBLE_TYPES: SellerType[] = ['farmer', 'dairy', 'homefood'];
 
-// FSSAI: 14 digits, state code (first 2) must be 01–38
+// FSSAI: 14 digits · digits 1–2 = state code (01–38) · digit 3 = license type (1/2/3)
 const FSSAI_REGEX = /^\d{14}$/;
 function validateFssai(v: string): string | null {
   if (!v) return null;
   if (!FSSAI_REGEX.test(v)) return 'FSSAI must be exactly 14 digits';
   const state = parseInt(v.slice(0, 2), 10);
   if (state < 1 || state > 38) return 'Invalid state code in FSSAI number';
+  const licType = v[2];
+  if (!['1', '2', '3'].includes(licType)) return 'Invalid license type — digit 3 must be 1, 2, or 3';
   return null;
 }
 
