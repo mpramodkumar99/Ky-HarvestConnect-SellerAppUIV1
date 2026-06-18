@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~56.0.16",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "buyerapp": "file:../Buyer",
     "expo": "~56.0.9",
     "expo-audio": "~56.0.12",
     "expo-constants": "~56.0.17",
