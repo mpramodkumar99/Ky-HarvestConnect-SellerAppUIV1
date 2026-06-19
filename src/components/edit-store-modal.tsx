@@ -8,6 +8,7 @@ import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import type { Store } from '@/context/store-context';
 import type { SellerType, BusinessType } from '@/services/user-api';
+import { PlacesSearchInput } from '@/components/places-search-input';
 
 const TYPE_OPTIONS: SellerType[] = ['farmer', 'artisan', 'dairy', 'homefood', 'trades', 'kirana'];
 
@@ -121,13 +122,11 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
 
             <View style={s.field}>
               <Text style={s.label}>{t('edit_store_location')}</Text>
-              <TextInput
-                style={s.input}
+              <PlacesSearchInput
                 value={location}
-                onChangeText={setLocation}
                 placeholder={t('edit_store_location_ph')}
-                placeholderTextColor={c.textFaint}
-                editable={!loading}
+                onChangeText={setLocation}
+                onSelect={(detail) => setLocation(detail.location)}
               />
             </View>
 

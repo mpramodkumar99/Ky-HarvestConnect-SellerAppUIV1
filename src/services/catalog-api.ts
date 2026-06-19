@@ -124,6 +124,42 @@ export const SHIPS_TO_OPTIONS: { value: ShipsTo; label: string }[] = [
 
 export const COMMON_UNITS = ['kg', '500g', '250g', 'litre', '500ml', 'piece', 'dozen', 'bundle'];
 
+// Sub-category → relevant units (most specific signal)
+export const UNITS_BY_SUBCATEGORY: Record<string, string[]> = {
+  // farm_products
+  grains_staples:          ['kg', '500g', '250g', 'quintal', 'bag'],
+  vegetables_spices:       ['kg', '500g', '250g', 'bunch', 'dozen'],
+  animal_products:         ['dozen', 'piece', 'litre', '500ml', 'kg'],
+  // processed_foods
+  pastes_powders:          ['250g', '500g', '100g', 'kg', 'jar'],
+  oils:                    ['litre', '500ml', '200ml', '5L', 'jar'],
+  // foods
+  preserved_packaged:      ['piece', 'pack', 'box', 'jar', 'kg'],
+  // arts_handmade
+  furniture:               ['piece', 'set'],
+  iron_works:              ['piece', 'kg', 'set'],
+  vendor_products:         ['piece', 'dozen', 'pack', 'box'],
+  dealer_products:         ['piece', 'pack', 'set', 'box'],
+  materials_finishes:      ['kg', 'litre', 'bag', 'roll'],
+  // services
+  utilities:               ['hour', 'day', 'visit', 'month'],
+  beauty_wellness:         ['session', 'hour', 'pack'],
+  technical:               ['hour', 'day', 'job', 'visit'],
+  construction_finishing:  ['sq.ft', 'day', 'job', 'kg'],
+  mechanical:              ['hour', 'day', 'job'],
+  rentals:                 ['day', 'week', 'month', 'hour'],
+};
+
+// Store-type → units used when sub-category has no specific mapping
+export const UNITS_BY_SELLER_TYPE: Record<string, string[]> = {
+  farmer:   ['kg', '500g', '250g', 'bunch', 'quintal'],
+  dairy:    ['litre', '500ml', '200ml', 'kg', '500g', 'dozen'],
+  homefood: ['piece', 'pack', 'box', 'dozen', 'kg'],
+  artisan:  ['piece', 'set', 'dozen'],
+  trades:   ['piece', 'kg', 'litre', 'set', 'bag'],
+  kirana:   ['kg', '500g', '250g', 'litre', '500ml', 'piece', 'dozen'],
+};
+
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
