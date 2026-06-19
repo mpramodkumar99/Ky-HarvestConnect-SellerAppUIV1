@@ -8,7 +8,8 @@ import { Image } from 'expo-image';
 import {
   CatalogProduct, CreateProductInput, Category, SubCategory,
   CATEGORIES, SUB_CATEGORIES_BY_CATEGORY, CATEGORIES_BY_SELLER_TYPE,
-  SHIPS_TO_OPTIONS, COMMON_UNITS, LOW_STOCK_THRESHOLD,
+  SHIPS_TO_OPTIONS, LOW_STOCK_THRESHOLD,
+  UNITS_BY_SUBCATEGORY, UNITS_BY_SELLER_TYPE, COMMON_UNITS,
   createProduct, updateProduct,
 } from '@/services/catalog-api';
 import type { SellerType, ShipsTo } from '@/services/user-api';
@@ -90,6 +91,12 @@ function isLocalUri(uri: string): boolean {
   return uri.startsWith('file://') || uri.startsWith('content://');
 }
 
+function getSmartUnits(storeType: SellerType, subCategory: SubCategory): string[] {
+  if (UNITS_BY_SUBCATEGORY[subCategory]) return UNITS_BY_SUBCATEGORY[subCategory];
+  if (UNITS_BY_SELLER_TYPE[storeType])   return UNITS_BY_SELLER_TYPE[storeType];
+  return COMMON_UNITS;
+}
+
 export function ProductFormModal({ visible, storeType, onClose, onSaved, editProduct }: Props) {
   const { activeStore } = useStore();
   const { showToast } = useToast();
@@ -140,8 +147,23 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
   }, [visible, editProduct]);
 
   function setCategory(cat: Category) {
-    const firstSub = SUB_CATEGORIES_BY_CATEGORY[cat][0].value;
-    setForm((f) => ({ ...f, category: cat, subCategory: firstSub }));
+    const firstSub  = SUB_CATEGORIES_BY_CATEGORY[cat][0].value as SubCategory;
+    const newUnits  = getSmartUnits(storeType, firstSub);
+    setForm((f) => ({
+      ...f,
+      category:    cat,
+      subCategory: firstSub,
+      unit:        newUnits.includes(f.unit) ? f.unit : newUnits[0],
+    }));
+  }
+
+  function setSubCategory(sub: SubCategory) {
+    const newUnits = getSmartUnits(storeType, sub);
+    setForm((f) => ({
+      ...f,
+      subCategory: sub,
+      unit:        newUnits.includes(f.unit) ? f.unit : newUnits[0],
+    }));
   }
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -228,7 +250,8 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
     }
   }
 
-  const subCats = SUB_CATEGORIES_BY_CATEGORY[form.category];
+  const subCats    = SUB_CATEGORIES_BY_CATEGORY[form.category];
+  const smartUnits = getSmartUnits(storeType, form.subCategory);
 
   return (
     <>
@@ -325,7 +348,7 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
                     <Pressable
                       key={sc.value}
                       style={[s.subCatChip, form.subCategory === sc.value && s.chipActive]}
-                      onPress={() => setField('subCategory', sc.value as SubCategory)}>
+                      onPress={() => setSubCategory(sc.value as SubCategory)}>
                       <Text style={[s.chipTxt, form.subCategory === sc.value && s.chipTxtActive]}>
                         {sc.label}
                       </Text>
@@ -334,98 +357,39 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
                 </View>
               </View>
 
-              {/* Price + Stock row */}
-              <View style={s.twoColRow}>
-                <View style={[s.field, { flex: 1 }]}>
-                  <Text style={s.label}>{t('product_form_price')} <Text style={s.required}>*</Text></Text>
-                  <View style={s.priceRow}>
-                    <View style={s.pricePrefix}>
-                      <Text style={s.prefixTxt}>₹</Text>
-                    </View>
+              {/* ── INVENTORY CARD ───────────────────────────────── */}
+              <View style={s.sectionCard}>
+                <Text style={s.sectionCardTitle}>📦 Inventory</Text>
+
+                {/* Stock qty + Unit side by side */}
+                <View style={s.twoColRow}>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={s.label}>{t('product_form_stock')} <Text style={s.required}>*</Text></Text>
                     <TextInput
-                      style={[s.input, s.priceInput]}
-                      placeholder="0"
+                      style={s.input}
+                      placeholder="e.g. 50"
                       placeholderTextColor={c.textFaint}
                       keyboardType="numeric"
-                      value={form.priceRupees}
-                      onChangeText={(v) => setField('priceRupees', v.replace(/[^0-9.]/g, ''))}
+                      value={form.stockQuantity}
+                      onChangeText={(v) => setField('stockQuantity', v.replace(/[^0-9]/g, ''))}
+                    />
+                  </View>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={s.label}>{t('product_form_unit')} <Text style={s.required}>*</Text></Text>
+                    <TextInput
+                      style={s.input}
+                      placeholder="kg, L, piece…"
+                      placeholderTextColor={c.textFaint}
+                      value={form.unit}
+                      onChangeText={(v) => setField('unit', v)}
+                      maxLength={30}
                     />
                   </View>
                 </View>
 
-                <View style={[s.field, { flex: 1 }]}>
-                  <Text style={s.label}>{t('product_form_stock')} <Text style={s.required}>*</Text></Text>
-                  <TextInput
-                    style={s.input}
-                    placeholder="e.g. 50"
-                    placeholderTextColor={c.textFaint}
-                    keyboardType="numeric"
-                    value={form.stockQuantity}
-                    onChangeText={(v) => setField('stockQuantity', v.replace(/[^0-9]/g, ''))}
-                  />
-                </View>
-              </View>
-
-              {/* Original / MRP Price */}
-              <View style={s.field}>
-                <Text style={s.label}>{t('product_form_orig_price')}</Text>
-                <Text style={s.fieldHint}>{t('product_form_orig_price_hint')}</Text>
-                <View style={s.priceRow}>
-                  <View style={s.pricePrefix}>
-                    <Text style={s.prefixTxt}>₹</Text>
-                  </View>
-                  <TextInput
-                    style={[s.input, s.priceInput]}
-                    placeholder="0"
-                    placeholderTextColor={c.textFaint}
-                    keyboardType="numeric"
-                    value={form.originalPriceRupees}
-                    onChangeText={(v) => setField('originalPriceRupees', v.replace(/[^0-9.]/g, ''))}
-                  />
-                </View>
-              </View>
-
-              {/* Low stock threshold */}
-              <View style={s.field}>
-                <Text style={s.label}>{t('product_form_threshold')}</Text>
-                <Text style={s.fieldHint}>{t('product_form_threshold_hint')}</Text>
-                <View style={s.thresholdRow}>
-                  <TextInput
-                    style={[s.input, s.thresholdInput]}
-                    placeholder={String(LOW_STOCK_THRESHOLD)}
-                    placeholderTextColor={c.textFaint}
-                    keyboardType="numeric"
-                    value={form.lowStockThreshold}
-                    onChangeText={(v) => setField('lowStockThreshold', v.replace(/[^0-9]/g, ''))}
-                  />
-                  <Text style={s.thresholdSuffix}>{t('product_form_threshold_unit')}</Text>
-                </View>
-              </View>
-
-              {/* Minimum Order Quantity — wholesale kirana only */}
-              {isWholesale && (
-                <View style={s.field}>
-                  <Text style={s.label}>{t('product_form_moq_label')}</Text>
-                  <Text style={s.fieldHint}>Buyers must order at least this many units</Text>
-                  <View style={s.thresholdRow}>
-                    <TextInput
-                      style={[s.input, s.thresholdInput]}
-                      placeholder="e.g. 25"
-                      placeholderTextColor={c.textFaint}
-                      keyboardType="numeric"
-                      value={form.minimumOrderQty}
-                      onChangeText={(v) => setField('minimumOrderQty', v.replace(/[^0-9]/g, ''))}
-                    />
-                    <Text style={s.thresholdSuffix}>units</Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Unit */}
-              <View style={s.field}>
-                <Text style={s.label}>{t('product_form_unit')} <Text style={s.required}>*</Text></Text>
+                {/* Unit quick-select chips — smart list based on store type + sub-category */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
-                  {COMMON_UNITS.map((u) => (
+                  {smartUnits.map((u) => (
                     <Pressable
                       key={u}
                       style={[s.chip, form.unit === u && s.chipActive]}
@@ -434,14 +398,101 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
                     </Pressable>
                   ))}
                 </ScrollView>
-                <TextInput
-                  style={[s.input, { marginTop: 8 }]}
-                  placeholder={t('product_form_unit_ph')}
-                  placeholderTextColor={c.textFaint}
-                  value={form.unit}
-                  onChangeText={(v) => setField('unit', v)}
-                  maxLength={30}
-                />
+
+                <View style={s.sectionDivider} />
+
+                {/* Low stock alert — compact inline */}
+                <View style={s.inlineMetricRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.inlineMetricLabel}>🔔 {t('product_form_threshold')}</Text>
+                    <Text style={s.inlineMetricHint}>{t('product_form_threshold_hint')}</Text>
+                  </View>
+                  <View style={s.inlineMetricInput}>
+                    <TextInput
+                      style={s.compactNumInput}
+                      placeholder={String(LOW_STOCK_THRESHOLD)}
+                      placeholderTextColor={c.textFaint}
+                      keyboardType="numeric"
+                      value={form.lowStockThreshold}
+                      onChangeText={(v) => setField('lowStockThreshold', v.replace(/[^0-9]/g, ''))}
+                    />
+                    <Text style={s.compactSuffix}>{form.unit.trim() || 'units'}</Text>
+                  </View>
+                </View>
+
+                {/* MOQ — compact inline, wholesale kirana only */}
+                {isWholesale && (
+                  <View style={[s.inlineMetricRow, s.inlineMetricRowBordered]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.inlineMetricLabel}>📋 {t('product_form_moq_label')}</Text>
+                      <Text style={s.inlineMetricHint}>Min. units per order</Text>
+                    </View>
+                    <View style={s.inlineMetricInput}>
+                      <TextInput
+                        style={s.compactNumInput}
+                        placeholder="25"
+                        placeholderTextColor={c.textFaint}
+                        keyboardType="numeric"
+                        value={form.minimumOrderQty}
+                        onChangeText={(v) => setField('minimumOrderQty', v.replace(/[^0-9]/g, ''))}
+                      />
+                      <Text style={s.compactSuffix}>units</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* ── PRICING CARD ─────────────────────────────────── */}
+              <View style={s.sectionCard}>
+                <Text style={s.sectionCardTitle}>💰 Pricing</Text>
+
+                <View style={s.twoColRow}>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={s.label}>
+                      {t('product_form_price')}{form.unit.trim() ? ` per ${form.unit.trim()}` : ''} <Text style={s.required}>*</Text>
+                    </Text>
+                    <View style={s.priceRow}>
+                      <View style={s.pricePrefix}><Text style={s.prefixTxt}>₹</Text></View>
+                      <TextInput
+                        style={[s.input, s.priceInput]}
+                        placeholder="0"
+                        placeholderTextColor={c.textFaint}
+                        keyboardType="numeric"
+                        value={form.priceRupees}
+                        onChangeText={(v) => setField('priceRupees', v.replace(/[^0-9.]/g, ''))}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <Text style={s.label}>{t('product_form_orig_price')}</Text>
+                    <View style={s.priceRow}>
+                      <View style={s.pricePrefix}><Text style={s.prefixTxt}>₹</Text></View>
+                      <TextInput
+                        style={[s.input, s.priceInput]}
+                        placeholder="MRP"
+                        placeholderTextColor={c.textFaint}
+                        keyboardType="numeric"
+                        value={form.originalPriceRupees}
+                        onChangeText={(v) => setField('originalPriceRupees', v.replace(/[^0-9.]/g, ''))}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {(() => {
+                  const price = parseFloat(form.priceRupees);
+                  const mrp   = parseFloat(form.originalPriceRupees);
+                  if (!isNaN(price) && !isNaN(mrp) && mrp > price && price > 0) {
+                    const pct = Math.round(((mrp - price) / mrp) * 100);
+                    return (
+                      <View style={s.discountBadge}>
+                        <Text style={s.discountBadgeTxt}>🏷️ {pct}% off from MRP</Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
               </View>
 
               {/* Ships To */}
@@ -464,18 +515,35 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
                     <Text style={s.customAreaNoteDesc}>{t('product_form_custom_area_desc')}</Text>
                   </View>
                 ) : (
-                  <View style={s.shipsRow}>
+                  <View style={s.zonesGrid}>
                     {SHIPS_TO_OPTIONS.map((opt) => {
+                      const zone   = opt.value as ShipsTo;
                       const order: ShipsTo[] = ['mandal', 'district', 'state', 'national'];
-                      const implied = order.indexOf(opt.value as ShipsTo) <= order.indexOf(form.shipsTo);
+                      const isSelected = zone === form.shipsTo;
+                      const isImplied  = order.indexOf(zone) < order.indexOf(form.shipsTo);
+                      const cfg        = DELIVERY_ZONE_CONFIG[zone];
+                      const sub        =
+                        pincodeInfo && zone === 'mandal'   ? pincodeInfo.name     :
+                        pincodeInfo && zone === 'district' ? pincodeInfo.district :
+                        pincodeInfo && zone === 'state'    ? pincodeInfo.state    : null;
                       return (
                         <Pressable
-                          key={opt.value}
-                          style={[s.shipsChip, implied && s.chipActive]}
-                          onPress={() => setField('shipsTo', opt.value as ShipsTo)}>
-                          <Text style={[s.chipTxt, implied && s.chipTxtActive]}>
-                            {shipsToLabel(opt.value as ShipsTo)}
+                          key={zone}
+                          style={[
+                            s.zoneCard,
+                            isImplied && s.zoneCardImplied,
+                            isSelected && { backgroundColor: cfg.bg, borderColor: cfg.text },
+                          ]}
+                          onPress={() => setField('shipsTo', zone)}>
+                          <Text style={s.zoneIcon}>{cfg.icon}</Text>
+                          <Text style={[s.zoneLabel, isSelected && { color: cfg.text }]} numberOfLines={1}>
+                            {cfg.label}
                           </Text>
+                          {sub && (
+                            <Text style={[s.zoneLocation, isSelected && { color: cfg.text }]} numberOfLines={1}>
+                              {sub}
+                            </Text>
+                          )}
                         </Pressable>
                       );
                     })}
@@ -676,11 +744,60 @@ function makeStyles(c: AppColors) {
 
     twoColRow: { flexDirection: 'row', gap: 12 },
 
-    thresholdRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    thresholdInput: { width: 100 },
-    thresholdSuffix: { fontSize: 13, color: c.textMuted },
+    sectionCard: {
+      backgroundColor: c.bgScreen,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.borderLight,
+      padding: 14,
+      gap: 12,
+    },
+    sectionCardTitle: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: c.textMuted,
+      textTransform: 'uppercase' as const,
+      letterSpacing: 0.6,
+    },
+    discountBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: '#fef3c7',
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: '#fde68a',
+    },
+    discountBadgeTxt: { fontSize: 12, fontWeight: '700', color: '#92400e' },
 
-    priceRow: { flexDirection: 'row', alignItems: 'center' },
+    sectionDivider: { height: 1, backgroundColor: c.borderLight },
+
+    inlineMetricRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    inlineMetricRowBordered: {
+      borderTopWidth: 1,
+      borderTopColor: c.borderLight,
+      paddingTop: 10,
+      marginTop: 2,
+    },
+    inlineMetricLabel: { fontSize: 13, fontWeight: '600', color: c.text },
+    inlineMetricHint: { fontSize: 11, color: c.textFaint, marginTop: 2 },
+    inlineMetricInput: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    compactNumInput: {
+      width: 72,
+      borderWidth: 1,
+      borderColor: c.borderMid,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      fontSize: 14,
+      fontWeight: '600',
+      color: c.text,
+      backgroundColor: c.bg,
+      textAlign: 'center' as const,
+    },
+    compactSuffix: { fontSize: 12, color: c.textMuted, fontWeight: '600' },
+
+    priceRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     pricePrefix: {
       height: 44,
       paddingHorizontal: 14,
@@ -734,16 +851,22 @@ function makeStyles(c: AppColors) {
     customAreaNoteTitle: { fontSize: 13, fontWeight: '600', color: '#1e40af', marginBottom: 2 },
     customAreaNoteDesc: { fontSize: 12, color: '#3b82f6' },
 
-    shipsRow: { flexDirection: 'row', gap: 8 },
-    shipsChip: {
+    zonesGrid: { flexDirection: 'row', gap: 6 },
+    zoneCard: {
       flex: 1,
       alignItems: 'center',
       paddingVertical: 8,
-      borderRadius: 8,
-      backgroundColor: c.bgSubtle,
-      borderWidth: 1,
+      paddingHorizontal: 4,
+      borderRadius: 10,
+      borderWidth: 1.5,
       borderColor: c.border,
+      backgroundColor: c.bgScreen,
+      gap: 3,
     },
+    zoneCardImplied: { backgroundColor: c.primaryBg, borderColor: '#86efac' },
+    zoneIcon:     { fontSize: 16 },
+    zoneLabel:    { fontSize: 10, fontWeight: '700', color: c.textSub,  textAlign: 'center' as const },
+    zoneLocation: { fontSize: 9,  fontWeight: '500', color: c.textFaint, textAlign: 'center' as const },
 
     // Image section
     thumbGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

@@ -1,7 +1,7 @@
 # HarvestConnect Seller App — Implementation Guide
 
 **Repo:** `Ky-HarvestConnect-SellerAppUIV1`  
-**Branch:** `features/Pramod/seller-app-product-enhancements`  
+**Active branch:** `features/Pramod/seller-app-product-enhancements` → merged to `Dev` (PR #3)  
 **Stack:** Expo SDK 56 · Expo Router · React Native · React 19 · TypeScript
 
 ---
@@ -9,31 +9,33 @@
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                 Seller App (React Native)                │
-│                                                         │
-│  Screens          Components          Context           │
-│  ─────────        ──────────          ───────           │
-│  index.tsx        toast-provider      StoreProvider     │
-│  products.tsx     store-switcher      (active store,    │
-│  profile.tsx      product-form-modal  team members,     │
-│  orders.tsx       bank-account-modal  live fetch)       │
-│  analytics.tsx    create-store-modal                    │
-│                   seller-ui                             │
-└────────────────────┬────────────────────────────────────┘
-                     │ fetch (HTTP/JSON)
-          ┌──────────┴──────────┐
-          │                     │
-   ┌──────▼──────┐       ┌──────▼──────┐
-   │  UserSvc    │       │  CatalogSvc │
-   │  port 3002  │       │  port 3003  │
-   │             │       │             │
-   │  Users      │       │  Products   │
-   │  Addresses  │       │  (CRUD)     │
-   │  Sellers    │       │  (owned by  │
-   │  Team       │       │   sellerId) │
-   │  BankAcct   │       │             │
-   └─────────────┘       └─────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                   Seller App (React Native)                  │
+│                                                             │
+│  Screens            Components             Context           │
+│  ─────────          ──────────             ───────           │
+│  index.tsx          toast-provider         StoreProvider     │
+│  products.tsx       store-switcher         LanguageProvider  │
+│  profile.tsx        product-form-modal     OrderAlertContext │
+│  orders.tsx         bank-account-modal                       │
+│  analytics.tsx      create-store-modal                       │
+│                     edit-store-modal                         │
+│                     delivery-zones-modal                     │
+│                     kyc-upload-modal                         │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ fetch (HTTP/JSON)
+            ┌──────────┴──────────┐
+            │                     │
+     ┌──────▼──────┐       ┌──────▼──────┐
+     │  UserSvc    │       │  CatalogSvc │
+     │  port 3002  │       │  port 3003  │
+     │             │       │             │
+     │  Users      │       │  Products   │
+     │  Addresses  │       │  (CRUD)     │
+     │  Sellers    │       │  (owned by  │
+     │  Team       │       │   sellerId) │
+     │  BankAcct   │       │             │
+     └─────────────┘       └─────────────┘
 ```
 
 The app talks to two backend microservices. Both run locally during development. The Android emulator reaches the host machine via `10.0.2.2` (not `localhost`).
@@ -64,43 +66,62 @@ npx expo start --android
 
 All three must be running simultaneously for full functionality. If a service is down, the app falls back to seed data (no crash).
 
+**Android emulator DNS fix:** If the emulator has no internet (pincode lookup fails), launch with:
+```bash
+emulator -avd <avd_name> -dns-server 8.8.8.8,8.8.4.4
+```
+The internal resolver `10.0.2.3` sometimes fails on Play Store images. This bypasses it.
+
 ---
 
 ## File Structure
 
 ```
 src/
-├── app/                     # Expo Router screens
-│   ├── _layout.tsx          # Root layout: StoreProvider + ToastProvider wrappers
-│   ├── index.tsx            # Dashboard / home screen
-│   ├── products.tsx         # Product listing, status toggle, delete
-│   ├── profile.tsx          # Store profile, team, bank account, store list
-│   ├── orders.tsx           # Orders screen (placeholder)
-│   └── analytics.tsx        # Analytics screen (placeholder)
+├── app/                         # Expo Router screens
+│   ├── _layout.tsx              # Root layout: providers + dark mode
+│   ├── index.tsx                # Dashboard / home screen
+│   ├── products.tsx             # Product listing, status toggle, delete
+│   ├── profile.tsx              # Store profile, team, bank account, store list
+│   ├── orders.tsx               # Orders screen (order alert context wired)
+│   └── analytics.tsx            # Analytics screen (placeholder)
 │
 ├── components/
-│   ├── toast-provider.tsx   # In-app toast + confirm bottom-sheet system
-│   ├── store-switcher.tsx   # Store switcher modal (switch between seller accounts)
-│   ├── product-form-modal.tsx  # Add/edit product bottom-sheet form
-│   ├── bank-account-modal.tsx  # Add/update bank account bottom-sheet
-│   ├── create-store-modal.tsx  # Create new seller account form
-│   ├── seller-ui.tsx        # Shared: KycBadge, RoleBadge
-│   ├── app-tabs.tsx         # Bottom tab navigator
-│   └── animated-icon.tsx    # Tab icon animation
+│   ├── toast-provider.tsx       # In-app toast + confirm bottom-sheet system
+│   ├── store-switcher.tsx       # Store switcher modal
+│   ├── product-form-modal.tsx   # Add/edit product bottom-sheet form
+│   ├── bank-account-modal.tsx   # Add/update bank account bottom-sheet
+│   ├── create-store-modal.tsx   # Create new seller account form
+│   ├── edit-store-modal.tsx     # Edit existing store (name, type, businessType, status)
+│   ├── delivery-zones-modal.tsx # Custom delivery zone configuration
+│   ├── kyc-upload-modal.tsx     # KYC document upload
+│   ├── seller-ui.tsx            # Shared: KycBadge, RoleBadge
+│   ├── app-tabs.tsx             # Bottom tab navigator
+│   └── animated-icon.tsx        # Tab icon animation
 │
 ├── context/
-│   └── store-context.tsx    # Active store state, live UserSvc fetch, team members
+│   ├── store-context.tsx        # Active store state, live UserSvc fetch, team members
+│   ├── language-context.tsx     # i18n: EN / TE / HI translation strings + t() hook
+│   └── order-alert-context.tsx  # Order notification sound + badge state
 │
 ├── services/
-│   ├── user-api.ts          # All UserSvc API calls (users, sellers, team, bank)
-│   └── catalog-api.ts       # All CatalogSvc API calls (products CRUD)
+│   ├── user-api.ts              # All UserSvc API calls (users, sellers, team, bank)
+│   └── catalog-api.ts           # All CatalogSvc API calls (products CRUD)
+│
+├── utils/
+│   └── pincode.ts               # India Post API lookup + in-memory cache
+│
+├── data/
+│   └── india-geo.ts             # State / district / mandal hierarchy for zone picker
 │
 ├── hooks/
-│   ├── use-theme.ts
+│   ├── use-app-colors.ts        # Dark/light mode color tokens via AppColors
 │   └── use-color-scheme.ts
 │
-└── constants/
-    └── theme.ts
+└── assets/
+    └── sounds/
+        ├── order-alert.m4a      # Order notification sound (iOS)
+        └── order-alert.wav      # Order notification sound (Android)
 ```
 
 ---
@@ -118,7 +139,6 @@ const BASE_URL = Platform.OS === 'android'
   : 'http://localhost:3002';  // iOS simulator → host directly
 
 // src/services/catalog-api.ts — same pattern on port 3003
-const BASE_URL = 'http://10.0.2.2:3003';  // TODO: make platform-aware
 ```
 
 **Physical device:** Replace `10.0.2.2` with your machine's local IP (e.g. `192.168.1.x`).
@@ -131,23 +151,22 @@ Port **3002**. All functions throw `Error` with the server's `error.title` on no
 
 #### Types
 ```typescript
-type UserType    = 'buyer' | 'seller'
-type SellerType  = 'farmer' | 'artisan' | 'dairy' | 'homefood' | 'trades'
-type ShipsTo     = 'mandal' | 'district' | 'state' | 'national'
-type SellerRole  = 'owner' | 'manager' | 'staff'
+type UserType     = 'buyer' | 'seller'
+type SellerType   = 'farmer' | 'artisan' | 'dairy' | 'homefood' | 'trades' | 'kirana'
+type BusinessType = 'retail' | 'wholesale'   // kirana only
+type ShipsTo      = 'mandal' | 'district' | 'state' | 'national'
+type SellerRole   = 'owner' | 'manager' | 'staff'
 type MemberStatus = 'active' | 'pending'
 
-interface User        { id, name, phone, email?, type, verified, createdAt, updatedAt }
-interface Address     { id, userId, label, line1, line2?, city, district, state,
-                        pincode, lat, lng, isDefault, createdAt, updatedAt }
-interface Seller      { id, userId?, name, type, phone, email?, description?,
-                        imageUrl?, location, pincode, lat, lng, deliveryZones,
-                        fssaiNumber?, verified, verifiedAt?, documentUrls,
-                        createdAt, updatedAt }
-interface SellerMember { id, sellerId, userId?, name, phone, role, status,
-                         invitedAt, joinedAt? }
-interface BankAccount { id, sellerId, accountHolderName, accountNumber,  // masked ···XXXX
-                        ifscCode, bankName, upiId?, createdAt, updatedAt }
+interface Seller {
+  id, userId?, name, type: SellerType, phone, email?,
+  description?, imageUrl?, bannerUrl?, location, pincode,
+  lat, lng, deliveryZones: ShipsTo[],
+  businessType?: BusinessType,   // kirana only — retail or wholesale
+  fssaiNumber?, address?,
+  socialHandles?: { instagram?, facebook?, whatsapp?, website?, youtube? },
+  verified, verifiedAt?, documentUrls, createdAt, updatedAt
+}
 ```
 
 #### API Functions
@@ -162,9 +181,9 @@ interface BankAccount { id, sellerId, accountHolderName, accountNumber,  // mask
 | `updateAddress(userId, addrId, input)` | PATCH | `/v1/users/:id/addresses/:addrId` | |
 | `deleteAddress(userId, addrId)` | DELETE | `/v1/users/:id/addresses/:addrId` | |
 | `listSellers(filters?)` | GET | `/v1/sellers` | filters: type, verified, userId, phone |
-| `getSeller(id)` | GET | `/v1/sellers/:id` | inter-service contract endpoint |
-| `createSeller(input)` | POST | `/v1/sellers` | always starts unverified |
-| `updateSeller(id, input)` | PATCH | `/v1/sellers/:id` | |
+| `getSeller(id)` | GET | `/v1/sellers/:id` | |
+| `createSeller(input)` | POST | `/v1/sellers` | blocks same phone+type; allows same phone+different type |
+| `updateSeller(id, input)` | PATCH | `/v1/sellers/:id` | includes businessType for kirana |
 | `getSellersByUser(userId)` | GET | `/v1/users/:id/sellers` | multi-store switcher |
 | `addDocument(sellerId, url)` | POST | `/v1/sellers/:id/documents` | KYC doc URL |
 | `removeDocument(sellerId, url)` | DELETE | `/v1/sellers/:id/documents` | |
@@ -186,22 +205,19 @@ Port **3003**. Seller identity is passed via `X-Seller-Id` header for ownership-
 #### Types
 ```typescript
 type Category      = 'farm_products' | 'processed_foods' | 'foods' | 'arts_handmade' | 'services'
-type SubCategory   = 'grains_staples' | 'vegetables_spices' | 'animal_products' | 'pastes_powders'
-                   | 'oils' | 'preserved_packaged' | 'furniture' | 'iron_works' | 'vendor_products'
-                   | 'dealer_products' | 'materials_finishes' | 'utilities' | 'beauty_wellness'
-                   | 'technical' | 'construction_finishing' | 'mechanical' | 'rentals'
 type ProductStatus = 'draft' | 'active' | 'archived'
 type ShipsTo       = 'mandal' | 'district' | 'state' | 'national'
 
 interface CatalogProduct {
   id, name, description, category, subCategory
-  price, originalPrice?       // in paise — divide by 100 for ₹
+  price, originalPrice?          // in paise — divide by 100 for ₹
   unit, stockQuantity
   sellerId, sellerName, location
-  inStock                     // server-derived: stockQuantity > 0
-  isVerified                  // admin-controlled, read-only
+  inStock                        // server-derived: stockQuantity > 0
+  isVerified                     // admin-controlled, read-only
   isHandmade, shipsTo
-  images                      // ordered list, max 5 URLs
+  minimumOrderQty?               // wholesale kirana only — minimum units per order
+  images                         // ordered list, max 5 URLs
   status, rating, reviewCount
   createdAt, updatedAt
 }
@@ -217,254 +233,202 @@ interface CatalogProduct {
 | `updateProduct(id, input, sellerId)` | PATCH | `/v1/products/:id` | X-Seller-Id header |
 | `deleteProduct(id, sellerId)` | DELETE | `/v1/products/:id` | X-Seller-Id header |
 
-#### Ownership verification (server-side)
-```
-No header     → 401 Unauthorized
-Wrong sellerId → 403 Forbidden
-Correct seller → execute operation
-```
-
 ---
 
 ## Store Context (`src/context/store-context.tsx`)
 
 The central state hub. Wraps the whole app in `_layout.tsx`.
 
-### What it does
-
-1. **Seed data as starting state** — 3 pre-seeded stores (seller-112, seller-113, seller-105) render immediately
-2. **Live fetch on mount** — calls `getSeller(id)` for each seeded store in parallel; merges live fields (name, type, phone, location, pincode, deliveryZones, description, imageUrl, verified, fssaiNumber) over the seed
-3. **Team fetch on store switch** — calls `listMembers(sellerId)` whenever active store changes; updates `memberCount` on the store object
-4. **Offline fallback** — if UserSvc is unreachable, seed data is used unchanged (no crash)
-5. **addStore** — called after `createSeller` succeeds; appends the new store and switches to it
-
 ### Context Value
 
 ```typescript
 interface StoreContextValue {
-  stores: Store[];              // full list; starts as seed, updates from UserSvc
-  activeStore: Store;           // derived from storeList + activeStoreId
-  teamMembers: TeamMember[];    // live members for the active store
-  loadingStores: boolean;       // true while fetching all sellers on mount
-  loadingTeam: boolean;         // true while fetching members on store switch
+  stores: Store[];
+  activeStore: Store;
+  teamMembers: TeamMember[];
+  loadingStores: boolean;
+  loadingTeam: boolean;
   setActiveStore(store: Store): void;
-  addStore(store: Store): void; // adds new store and switches to it
-  refreshTeam(): Promise<void>; // re-fetch team after invite/remove
-  refreshSeller(id: string): Promise<void>; // re-fetch single seller after profile update
+  addStore(store: Store): void;
+  refreshTeam(): Promise<void>;
+  refreshSeller(id: string): Promise<void>;
+  updateStoreStatus(id: string, status: 'live' | 'offline'): void;
 }
-```
-
-### Exported Helpers
-
-```typescript
-// Maps SellerType → display label, icon, category string
-SELLER_TYPE_CONFIG: Record<SellerType, { label, icon, category }>
-
-// Maps ShipsTo → display label, icon, bg/text colours for badges
-DELIVERY_ZONE_CONFIG: Record<ShipsTo, { label, icon, bg, text }>
-
-// Converts a UserSvc Seller API response to a Store UI object
-sellerToStore(seller: Seller, role?: SellerRole): Store
-
-// Role colours for pills and badges
-ROLE_CONFIG: Record<SellerRole, { label, bg, color }>
-
-// Role-based permission flags
-ROLE_PERMISSIONS: Record<SellerRole, {
-  canEditProducts, canViewAnalytics, canManagePayouts, canInviteMembers
-}>
 ```
 
 ### Store Interface
 
 ```typescript
 interface Store {
-  id: string;             // sellerId — matches UserSvc and CatalogSvc
+  id: string;
   name: string;
   type: SellerType;
-  category: string;       // UI-only: human-readable label
-  icon: string;           // UI-only: emoji for the store avatar
+  businessType?: BusinessType;   // kirana only
+  category: string;
+  icon: string;
   description?: string;
   imageUrl?: string;
+  bannerUrl?: string;
   location: string;
+  address?: string;
   phone: string;
   pincode: string;
   deliveryZones: ShipsTo[];
+  customDeliveryZone?: CustomDeliveryZone;  // set via DeliveryZonesModal
   verified: boolean;
   fssaiNumber?: string;
-  role: SellerRole;       // this user's role — 'owner' for self-created stores
-  memberCount: number;    // updated from listMembers response
-  productCount: number;   // placeholder — future: from CatalogSvc
-  ordersToday: number;    // placeholder — future: from OrderSvc
-  revenueToday: string;   // placeholder — future: from OrderSvc
+  socialHandles?: { instagram?, facebook?, whatsapp?, website?, youtube? };
+  status: 'live' | 'offline';
+  role: SellerRole;
+  memberCount: number;
+  productCount: number;
+  ordersToday: number;
+  revenueToday: string;
 }
 ```
 
-### Seller ID Alignment
-
-All three systems must use the same seller IDs for inter-service lookups to work:
-
-| Seller | ID | CatalogSvc seed | UserSvc seed | App seed |
-|---|---|---|---|---|
-| Desi Dairy Armoor | `seller-112` | ✓ | ✓ (fixed) | ✓ |
-| Amma Kitchen | `seller-113` | ✓ | ✓ (fixed) | ✓ |
-| Spice Route Nizamabad | `seller-105` | ✓ | ✓ (fixed) | ✓ |
-
-UserSvc previously used `randomUUID()` in the seed loop — this broke cross-service lookups on every restart. Fixed by using `this.store.set(fixedId, seller)` directly in the seed method.
-
----
-
-## In-App Toast System (`src/components/toast-provider.tsx`)
-
-Replaces all native `Alert.alert()` calls with themed in-app overlays.
-
-### Usage
+### Exported Helpers
 
 ```typescript
-import { useToast } from '@/components/toast-provider';
-
-const { showToast, showConfirm } = useToast();
-
-// Toast notification (auto-dismisses after 3.2s)
-showToast('Product deleted.', 'success');
-showToast('You can add up to 5 images.', 'warning');
-showToast(e.message, 'error');
-showToast('Feature is coming soon.', 'info');
-
-// Confirmation bottom-sheet
-showConfirm({
-  title: 'Delete Product',
-  message: 'This cannot be undone.',
-  confirmLabel: 'Delete',
-  destructive: true,
-  onConfirm: async () => { await deleteProduct(id, sellerId); },
-});
-```
-
-### Toast Variants
-
-| Type | Background | Border | Icon | Text |
-|---|---|---|---|---|
-| `success` | `#f0fdf4` | `#86efac` | ✅ | `#166534` |
-| `error` | `#fef2f2` | `#fca5a5` | ✕ | `#991b1b` |
-| `warning` | `#fffbeb` | `#fde68a` | ⚠️ | `#92400e` |
-| `info` | `#f0f9ff` | `#bae6fd` | 💬 | `#075985` |
-
-### Where it's used
-
-| Screen / Component | Event | Type |
-|---|---|---|
-| `profile.tsx` | Menu item press (coming soon) | info |
-| `profile.tsx` | Bank account saved | success |
-| `profile.tsx` | New store created | success |
-| `products.tsx` | Toggle status error | error |
-| `products.tsx` | Delete product (confirm) | — (confirm sheet) |
-| `products.tsx` | Delete error | error |
-| `product-form-modal.tsx` | 6th image attempt | warning |
-
-### Provider Setup (`src/app/_layout.tsx`)
-
-```tsx
-<StoreProvider>
-  <ToastProvider>
-    <AnimatedSplashOverlay />
-    <AppTabs />
-  </ToastProvider>
-</StoreProvider>
+SELLER_TYPE_CONFIG: Record<SellerType, { label, icon, category }>
+DELIVERY_ZONE_CONFIG: Record<ShipsTo, { label, icon, bg, text }>
+sellerToStore(seller, role?): Store
+ROLE_CONFIG: Record<SellerRole, { label, bg, color }>
+ROLE_PERMISSIONS: Record<SellerRole, { canEditProducts, canViewAnalytics, ... }>
 ```
 
 ---
 
-## Screens
+## Language / Translation (`src/context/language-context.tsx`)
 
-### `index.tsx` — Dashboard
+All UI strings go through `t('key')` — never hardcode display text in components.
 
-Shows today's summary cards (orders, revenue, pending actions) for the active store. Data is currently seeded from the store context. Future: wire to OrderSvc.
+### Usage
+```typescript
+const { t, language, setLanguage } = useLanguage();
+// language: 'en' | 'te' | 'hi'
+t('create_store_retail')  // → 'Retail' / 'రిటైల్' / 'रिटेल'
+```
 
-### `products.tsx` — Product Management
+### Key Groups
 
-- Fetches products via `listProducts({ sellerId: activeStore.id })` from CatalogSvc
-- Status toggle: `updateProduct` with `{ status: 'active' | 'archived' }`
-- Delete: `showConfirm` → `deleteProduct(id, activeStore.id)`
-- Floating `+` button opens `ProductFormModal`
-- `X-Seller-Id` header is sent automatically by `updateProduct` / `deleteProduct`
+| Prefix | Component |
+|---|---|
+| `create_store_*` | CreateStoreModal |
+| `edit_store_*` | EditStoreModal |
+| `product_form_*` | ProductFormModal |
+| `profile_*` | profile.tsx |
+| `delivery_zone_*` | DeliveryZonesModal |
+| `kyc_*` | KycUploadModal |
 
-### `profile.tsx` — Store Profile
+### Kirana-specific keys added
+```
+create_store_business_model    — 'Business Model'
+create_store_retail            — 'Retail'
+create_store_retail_sub        — 'Sells to consumers'
+create_store_wholesale         — 'Wholesale'
+create_store_wholesale_sub     — 'Bulk to shops / resellers'
+create_store_dup_title_prefix  — 'You already have a'
+create_store_dup_title_suffix  — 'store'
+create_store_dup_desc          — duplicate warning body
+create_store_dup_confirm       — 'Create Anyway'
+product_form_moq_label         — 'Minimum Order Quantity (MOQ)'
+product_form_custom_area       — 'Custom Area'
+product_form_custom_area_title — 'Custom Delivery Area'
+product_form_custom_area_desc  — description text
+```
 
-The most feature-rich screen. Sections:
-1. **Header** — active store avatar (tap to switch), name, role badge, location, store stats
-2. **KYC + Bank** — verification badge from `activeStore.verified`; payout row fetches `getBankAccount` on mount; Add/Change opens `BankAccountModal`
-3. **Delivery Coverage** — badges rendered from `activeStore.deliveryZones` via `DELIVERY_ZONE_CONFIG`
-4. **FSSAI** — `activeStore.fssaiNumber` with Active/Pending badge
-5. **My Stores** — all stores from context; tap to switch; **＋ New** opens `CreateStoreModal`
-6. **Team Members** — live from `listMembers` via context; spinner while `loadingTeam`; Invited/Joined dates formatted from ISO timestamps
-7. **Menu** — navigation and coming-soon items
-8. **Seller Tier** — static display
-9. **Logout**
+---
 
-### `orders.tsx` / `analytics.tsx`
+## Pincode Utility (`src/utils/pincode.ts`)
 
-Placeholder screens — to be wired when OrderSvc is built.
+Calls the India Post API and caches results in memory.
+
+```typescript
+export interface PincodeInfo { name: string; district: string; state: string; }
+
+await lookupPincode('503245')
+// → { name: 'Navipet', district: 'Nizamabad', state: 'Telangana' }
+```
+
+### Name resolution logic
+
+| Condition | `name` value used |
+|---|---|
+| `BranchType === 'Head Post Office'` | `po.Name` (the PO name is the town) |
+| `Block === District` | Sub Post Office `Name` from the list (avoids redundancy like "Nizamabad, Nizamabad") |
+| Otherwise | `po.Block` (the mandal/block name) |
+
+**Example — 503245:** District="Nizamabad", Block="Nizamabad" (same) → uses Sub PO "Navipet" instead.
 
 ---
 
 ## Components
 
-### `ProductFormModal`
-
-Bottom-sheet form for creating and editing products. Fields match `CatalogProduct`:
-- Name, description, category (with sub-category that updates based on category), price, original price, unit, stock quantity, shipsTo, isHandmade, images (max 5 URLs), status
-
-On create: calls `createProduct(input)`.  
-On edit: calls `updateProduct(id, input, activeStore.id)` with `X-Seller-Id`.
-
-### `BankAccountModal`
-
-Bottom-sheet form for bank account. Fields: account holder name, account number (`secureTextEntry`), IFSC code (auto-uppercased, regex-validated `^[A-Z]{4}0[A-Z0-9]{6}$`), bank name, UPI ID (optional).
-
-- **Existing account**: pre-fills all fields except account number (only masked version available from API; user must re-enter to change)
-- Calls `setBankAccount(sellerId, input)` — upsert semantics (safe for both add and change)
-- Success → updates payout row in profile via `setBankAccountState`
-
-Validation (client-side before API call):
-- Account number: `^\d{9,18}$`
-- IFSC: `^[A-Z]{4}0[A-Z0-9]{6}$`
-
 ### `CreateStoreModal`
 
-Bottom-sheet form for registering a new seller account on UserSvc.
+Bottom-sheet form for registering a new seller account.
 
-Fields:
-- **Store Type** — horizontal scroll selector (Farmer/Dairy/Home Food/Artisan/Trades) with icon chips
-- **Store Name** — text input
-- **Mobile Number** — auto-normalises: `9876543210` → `+919876543210`; `919876543210` → `+919876543210`
-- **Location** — display string (e.g. "Nizamabad, Telangana")
-- **Pincode** — 6-digit number; UserSvc geocodes this to lat/lng
-- **Delivery Zones** — 2×2 checkbox grid (Mandal / District / State / All India)
-- **Description** — optional, multiline
-- **FSSAI License** — optional
+**Fields:**
+- Store Type — all 6 types: `farmer | artisan | dairy | homefood | trades | kirana`
+- Business Model — **kirana only**: Retail 🛍️ / Wholesale 📦 toggle
+- Store Name, Mobile Number (auto-normalised to E.164), Location, Pincode
+- Delivery Zones — cascade chip selector (see below)
+- Custom Area toggle — stores a `customDeliveryZone` flag; full zone config via DeliveryZonesModal post-creation
+- Description (optional), FSSAI License (optional)
 
-On save:
-1. Validates all required fields client-side
-2. Calls `createSeller(input)` → UserSvc returns a Seller with a server-assigned UUID
-3. Calls `sellerToStore(seller, 'owner')` to convert to Store
-4. Calls `addStore(store)` in context → list updates, active store switches
-5. Shows success toast
+**Duplicate store type warning:**
+When creating a store with a type the user already has under the same phone, a soft inline warning appears ("You already have a 🏪 Kirana store…") with Cancel / **Create Anyway**. The backend additionally hard-blocks same phone + same type with a 409.
 
-New stores start as `verified: false`. The KYC badge on the new store will show "Pending" until an admin verifies via `PATCH /v1/sellers/:id/verify`.
+**Zone cascade:**
+Selecting a zone auto-selects all lower zones. Deselecting removes all higher zones.
+```
+national → selects: national, state, district, mandal
+district → selects: district, mandal
+```
+
+### `EditStoreModal`
+
+Bottom-sheet form for editing an existing store.
+
+**Fields:** Store Name, Description, Location, Address, Store Type, Business Model (kirana only), Status (Live / Offline)
+
+- **Business Model toggle** shown only when `type === 'kirana'`; pre-fills from `store.businessType ?? 'retail'`
+- Sends `businessType` in the PATCH payload only for kirana stores
+- `kirana` is included in the type grid (can be changed to/from kirana)
+- Status change is applied locally via `updateStoreStatus` in context (no extra API call)
+
+### `ProductFormModal`
+
+Bottom-sheet form for adding and editing products.
+
+**Kirana-specific fields:**
+- **Minimum Order Quantity (MOQ)** — shown only when store is `kirana` + `businessType === 'wholesale'`; sets `minimumOrderQty` on the product
+- **Custom Area toggle** — shown when the active store has a `customDeliveryZone`; when enabled, `shipsTo` is derived automatically from the zone's finest granularity (mandal > district > state)
+
+**Ships To cascade:** Chips highlight all lower zones when a higher zone is selected (same cascade logic as CreateStoreModal).
+
+**Category filtering:** `CATEGORIES_BY_SELLER_TYPE` limits visible categories to those relevant for the active store type.
+
+### `DeliveryZonesModal`
+
+Configures `customDeliveryZone` on the active store — select specific states, districts, and mandals from the India geo hierarchy (`src/data/india-geo.ts`).
 
 ### `StoreSwitcher`
 
-Modal that lists all stores and lets the user tap to switch active store.
+Lists all stores. Passes `existingTypes={stores.map(s => s.type)}` to `CreateStoreModal` to enable the duplicate-type warning.
 
-### `KycBadge` / `RoleBadge` (`seller-ui.tsx`)
+---
 
-```tsx
-<KycBadge status="verified" />   // green "Verified ✓" pill
-<KycBadge status="pending" />    // amber "Pending" pill
+## Order Alert Context (`src/context/order-alert-context.tsx`)
 
-<RoleBadge role="owner" />       // role pill using ROLE_CONFIG colours
+Manages real-time order notification state and sound playback. Wired into the orders tab header.
+
+```typescript
+const { hasNewOrders, clearAlerts, playAlertSound } = useOrderAlert();
 ```
+
+Audio assets at `assets/sounds/order-alert.m4a` (iOS) and `.wav` (Android).
 
 ---
 
@@ -473,17 +437,31 @@ Modal that lists all stores and lets the user tap to switch active store.
 ### 1. Seed data as immediate state, live data as overlay
 The app renders immediately from hardcoded seed rather than showing a blank loading screen. UserSvc data is fetched in the background and merged without resetting the UI.
 
-### 2. `teamMembers` is per-active-store, not a Record
-Changed from `Record<string, TeamMember[]>` to `TeamMember[]`. The context always holds the team for the currently active store, fetched fresh on every store switch. This keeps memory lean and data fresh.
+### 2. Multi-store under same phone
+A seller can have multiple stores under one phone number as long as they are different types (e.g. farmer + kirana). The same phone + same type combination is blocked at the backend (409 ConflictError). The client shows a soft "Create Anyway" warning before hitting the backend, so the UX is friendly for intentional duplicates.
 
-### 3. Account number never round-trips in full
-`BankAccountModal` forces re-entry of the account number when updating because the API only returns `···1234` (masked). This is a deliberate security boundary — the app never holds the full number.
+### 3. Kirana business model affects product form
+`businessType` on the store flows down to product creation: wholesale kirana stores get the MOQ field; retail stores don't. This is derived via `isWholesale = storeType === 'kirana' && activeStore.businessType === 'wholesale'` in `ProductFormModal`.
 
-### 4. Fixed seller IDs in UserSvc seed
-UserSvc originally used `randomUUID()` in its seed loop. This caused `getSeller('seller-112')` to 404 on every restart because IDs regenerated. Fixed by seeding with literal IDs (`seller-112`, `seller-105`, etc.) matching catalog-svc and the app's store context.
+### 4. Zone cascade anchored on DELIVERY_ZONES array order
+```typescript
+const DELIVERY_ZONES: ShipsTo[] = ['mandal', 'district', 'state', 'national'];
+// Selecting idx=2 (state) → slice(0, 3) → ['mandal', 'district', 'state']
+// Deselecting idx=1 (district) → slice(0, 1) → ['mandal']
+```
+This keeps selection logic to a single array operation with no special cases.
 
-### 5. Phone auto-normalisation in CreateStoreModal
-Users type Indian numbers in many formats. The modal accepts `9876543210`, `919876543210`, or `+919876543210` and normalises to E.164 (`+91XXXXXXXXXX`) before sending to UserSvc.
+### 5. Pincode Sub PO fallback for ambiguous localities
+When the India Post API returns a pincode where `Block === District` (common in district headquarters), using the Block name is redundant. The Sub Post Office name (e.g. "Navipet" for 503245) is a more useful locality label.
+
+### 6. Account number never round-trips in full
+`BankAccountModal` forces re-entry of the account number when updating because the API only returns `···1234` (masked). This is a deliberate security boundary.
+
+### 7. Fixed seller IDs in UserSvc seed
+UserSvc originally used `randomUUID()` in its seed loop, causing 404s on restart because IDs regenerated. Fixed by seeding with literal IDs (`seller-112`, `seller-105`, etc.) matching CatalogSvc and the app's store context.
+
+### 8. Dark mode via `makeStyles(c: AppColors)`
+Every component uses `const c = useAppColors(); const s = makeStyles(c)` — no hardcoded hex colours in JSX. `AppColors` tokens cover `bg`, `bgScreen`, `bgSubtle`, `primaryBg`, `text`, `textSub`, `textMuted`, `textFaint`, `border`, `borderLight`, `borderMid`, `primaryText`, `errorBg`, `errorBorder`, `errorText`.
 
 ---
 
@@ -491,13 +469,14 @@ Users type Indian numbers in many formats. The modal accepts `9876543210`, `9198
 
 | Feature | Requires | Notes |
 |---|---|---|
-| **Store Settings screen** | — | Edit seller name, description, imageUrl, deliveryZones via `updateSeller` |
-| **KYC Documents screen** | — | List `documentUrls`; call `addDocument` / `removeDocument` |
-| **Invite Team Member** | — | Form calling `inviteMember`; refresh via `refreshTeam` after |
+| **Store Settings screen** | — | Full edit: imageUrl, bannerUrl, socialHandles, deliveryZones via `updateSeller` |
+| **KYC Documents screen** | — | List `documentUrls`; `addDocument` / `removeDocument` |
+| **Invite Team Member flow** | — | Form calling `inviteMember`; `refreshTeam` after |
 | **Bank & Payouts screen** | — | Deeper bank account view; transaction history placeholder |
 | **Real-time product count** | CatalogSvc | `listProducts({ sellerId })` count in store card |
-| **Orders screen** | OrderSvc | Wire when UC-ORD-01 is built |
+| **Orders screen wiring** | OrderSvc | Wire OrderAlertContext to live order feed |
 | **Analytics screen** | OrderSvc | Revenue charts, top products |
 | **Auth / Login** | AuthSvc | Replace hardcoded `role: 'owner'`; wire `X-User-Id` for activateMember |
-| **Image upload** | StoragePort (S3) | Upload to storage → get URL → call `addDocument` or set `imageUrl` |
-| **Physical device support** | — | Make `catalog-api.ts` BASE_URL platform-aware (same as user-api.ts) |
+| **Image upload** | StoragePort (S3) | Upload → URL → `addDocument` or `imageUrl` |
+| **Physical device support** | — | `catalog-api.ts` BASE_URL already platform-aware |
+| **Translation wiring** | — | Replace remaining hardcoded strings in create-store-modal and product-form-modal with `t()` calls |

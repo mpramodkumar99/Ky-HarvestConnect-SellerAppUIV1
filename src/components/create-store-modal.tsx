@@ -10,6 +10,7 @@ import { useAuth } from '@/context/auth-context';
 import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import { lookupPincode, type PincodeInfo } from '@/utils/pincode';
+import { PlacesSearchInput } from '@/components/places-search-input';
 
 interface Props {
   visible: boolean;
@@ -218,20 +219,21 @@ export function CreateStoreModal({ visible, onCreated, onClose, existingTypes = 
               />
             </Field>
 
-            {/* Location */}
-            <Field label={t('create_store_location')} required hint={t('create_store_location_hint')} c={c}>
-              <TextInput
-                style={s.input}
-                placeholder={t('create_store_location_ph')}
-                placeholderTextColor={c.textFaint}
+            {/* Location — Google Places search */}
+            <Field label={t('create_store_location')} required hint="Search by area, landmark or city" c={c}>
+              <PlacesSearchInput
                 value={location}
+                placeholder={t('create_store_location_ph')}
                 onChangeText={setLocation}
-                autoCapitalize="words"
+                onSelect={(detail) => {
+                  setLocation(detail.location);
+                  if (detail.pincode) setPincode(detail.pincode);
+                }}
               />
             </Field>
 
-            {/* Pincode */}
-            <Field label={t('create_store_pincode')} required hint={t('create_store_pincode_hint')} c={c}>
+            {/* Pincode — auto-filled from Places, editable as fallback */}
+            <Field label={t('create_store_pincode')} required hint="Auto-filled from location search, or enter manually" c={c}>
               <TextInput
                 style={s.input}
                 placeholder={t('create_store_pincode_ph')}
