@@ -1,52 +1,38 @@
-import { StyleSheet, View } from 'react-native';
-import Animated, { Keyframe, Easing } from 'react-native-reanimated';
+import { useEffect, useRef } from 'react';
+import { StyleSheet, View, Animated } from 'react-native';
 
 import classes from './animated-icon.module.css';
-
-const DURATION = 300;
 
 export function AnimatedSplashOverlay() {
   return null;
 }
 
-const keyframe = new Keyframe({
-  0: {
-    transform: [{ scale: 0 }],
-  },
-  60: {
-    transform: [{ scale: 1.2 }],
-    easing: Easing.elastic(1.2),
-  },
-  100: {
-    transform: [{ scale: 1 }],
-    easing: Easing.elastic(1.2),
-  },
-});
-
-const logoKeyframe = new Keyframe({
-  0: {
-    opacity: 0,
-  },
-  60: {
-    transform: [{ scale: 1.2 }],
-    opacity: 0,
-    easing: Easing.elastic(1.2),
-  },
-  100: {
-    transform: [{ scale: 1 }],
-    opacity: 1,
-    easing: Easing.elastic(1.2),
-  },
-});
-
 export function AnimatedIcon() {
+  const bgScale      = useRef(new Animated.Value(0)).current;
+  const logoOpacity  = useRef(new Animated.Value(0)).current;
+  const logoScale    = useRef(new Animated.Value(1.2)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(bgScale, { toValue: 1, useNativeDriver: false }),
+      Animated.sequence([
+        Animated.delay(180),
+        Animated.parallel([
+          Animated.spring(logoOpacity, { toValue: 1, useNativeDriver: false }),
+          Animated.spring(logoScale,   { toValue: 1, useNativeDriver: false }),
+        ]),
+      ]),
+    ]).start();
+  }, []);
+
   return (
     <View style={styles.iconContainer}>
-      <Animated.View style={styles.background} entering={keyframe.duration(DURATION)}>
+      <Animated.View style={[styles.background, { transform: [{ scale: bgScale }] }]}>
         <div className={classes.sellerLogoBackground} />
       </Animated.View>
 
-      <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
+      <Animated.View
+        style={[styles.imageContainer, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
         <View style={styles.logoMark}>
           <Animated.Text style={styles.logoEmoji}>🌾</Animated.Text>
         </View>

@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { SellerType, BusinessType, ShipsTo, SellerRole, MemberStatus, Seller, SocialHandles, CustomDeliveryZone, PendingInvite } from '@/services/user-api';
 import { getSeller, listMembers, getSellersByUser, getUser, getPendingInvites, activateMember, removeMember } from '@/services/user-api';
+import { listOrders } from '@/services/order-api';
+import { listProducts } from '@/services/catalog-api';
 import { useAuth } from '@/context/auth-context';
 
 // Re-export so screens can import StoreRole from here without coupling to user-api
@@ -68,6 +70,7 @@ interface StoreContextValue {
   updateStoreStatus: (id: string, status: 'live' | 'offline') => void;
   refreshTeam: () => Promise<void>;
   refreshSeller: (id: string) => Promise<void>;
+  refreshStats: (id: string) => Promise<void>;  // re-fetch ordersToday / revenueToday / productCount
 }
 
 // ── Seed data — UI-only fields and offline fallback ───────────────────────────
@@ -85,6 +88,31 @@ const TEAM_SEED: Record<string, TeamMember[]> = {};
 
 function initials(name: string): string {
   return name.split(' ').map(w => w[0] ?? '').join('').slice(0, 2).toUpperCase();
+}
+
+async function fetchStoreStats(sellerId: string): Promise<{
+  ordersToday: number;
+  revenueToday: string;
+  productCount: number;
+}> {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [orders, products] = await Promise.all([
+    listOrders({ sellerId }),
+    listProducts({ sellerId, status: 'active' }),
+  ]);
+
+  const todayOrders = orders.filter(
+    o => new Date(o.createdAt) >= todayStart && o.status !== 'cancelled',
+  );
+  const revenueToday = todayOrders.reduce((sum, o) => sum + o.total, 0);
+
+  return {
+    ordersToday:  todayOrders.length,
+    revenueToday: `₹${(revenueToday / 100).toLocaleString('en-IN')}`,
+    productCount: products.length,
+  };
 }
 
 function mergeLiveSeller(seed: Store, live: Awaited<ReturnType<typeof getSeller>>): Store {
@@ -155,6 +183,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         } catch {
           setPendingInvites([]);
         }
+        // Fetch live stats for each store in the background — don't block initial render
+        for (const store of stores) {
+          fetchStoreStats(store.id).then(stats => {
+            setStoreList(prev =>
+              prev.map(s => s.id === store.id ? { ...s, ...stats } : s),
+            );
+          }).catch(() => { /* keep 0 defaults on error */ });
+        }
       } catch {
         setStoreList([]);
         setPendingInvites([]);
@@ -201,6 +237,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         prev.map(s => s.id !== id ? s : { ...mergeLiveSeller(s, live), status: s.status })
       );
     } catch { /* silent — keep current data */ }
+  }, []);
+
+  const refreshStats = useCallback(async (id: string) => {
+    try {
+      const stats = await fetchStoreStats(id);
+      setStoreList(prev => prev.map(s => s.id === id ? { ...s, ...stats } : s));
+    } catch { /* silent — keep current values */ }
   }, []);
 
   const acceptInvite = useCallback(async (sellerId: string, memberId: string) => {
@@ -254,6 +297,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateStoreStatus,
       refreshTeam,
       refreshSeller,
+      refreshStats,
     }}>
       {children}
     </StoreContext.Provider>

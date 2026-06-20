@@ -1,25 +1,29 @@
-import { Modal, View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { useState } from 'react';
+import { Modal, View, Text, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useToast } from '@/components/toast-provider';
 import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import type { BankAccount } from '@/services/user-api';
+import { requestPayout } from '@/services/payment-api';
 
 interface Props {
   visible: boolean;
-  availableAmount: number;
-  grossAmount: number;
+  sellerId: string;
+  availableAmount: number;   // rupees (already divided by 100)
+  grossAmount: number;       // rupees
   deliveredCount: number;
   bankAccount: BankAccount | null;
   onClose: () => void;
 }
 
 export function PayoutModal({
-  visible, availableAmount, grossAmount, deliveredCount, bankAccount, onClose,
+  visible, sellerId, availableAmount, grossAmount, deliveredCount, bankAccount, onClose,
 }: Props) {
   const { showToast } = useToast();
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
+  const [requesting, setRequesting] = useState(false);
   const commission = grossAmount - availableAmount;
   const canRequest = availableAmount > 0 && bankAccount !== null;
 
@@ -36,7 +40,22 @@ export function PayoutModal({
         { text: t('payout_cancel'), style: 'cancel' },
         {
           text: t('payout_request_now'),
-          onPress: () => { onClose(); showToast(t('payout_success_toast'), 'success'); },
+          onPress: async () => {
+            setRequesting(true);
+            try {
+              await requestPayout({
+                sellerId,
+                amount: availableAmount * 100,  // rupees → paise
+                notes:  `Bank: ${bankAccount.bankName} ···${last4}`,
+              });
+              showToast(t('payout_success_toast'), 'success');
+              onClose();
+            } catch {
+              showToast('Payout request failed. Please try again.', 'error');
+            } finally {
+              setRequesting(false);
+            }
+          },
         },
       ],
     );
@@ -124,12 +143,15 @@ export function PayoutModal({
               <Text style={s.closeTxt2}>{t('payout_close')}</Text>
             </Pressable>
             <Pressable
-              style={[s.requestBtn, !canRequest && s.requestBtnDisabled]}
+              style={[s.requestBtn, (!canRequest || requesting) && s.requestBtnDisabled]}
               onPress={handleRequestPayout}
-              disabled={!canRequest}>
-              <Text style={s.requestBtnTxt}>
-                {availableAmount === 0 ? t('payout_no_balance') : t('payout_request_btn')}
-              </Text>
+              disabled={!canRequest || requesting}>
+              {requesting
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={s.requestBtnTxt}>
+                    {availableAmount === 0 ? t('payout_no_balance') : t('payout_request_btn')}
+                  </Text>
+              }
             </Pressable>
           </View>
 

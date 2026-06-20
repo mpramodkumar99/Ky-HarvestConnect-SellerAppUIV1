@@ -267,6 +267,7 @@ export default function ProfileScreen() {
       />
       <ReviewsModal
         visible={reviewsOpen}
+        sellerId={activeStore.id}
         onClose={() => setReviewsOpen(false)}
       />
       <HelpSupportModal

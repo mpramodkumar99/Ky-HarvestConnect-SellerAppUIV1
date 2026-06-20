@@ -1,24 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Modal, View, Text, Pressable, StyleSheet,
-  ScrollView, TextInput,
+  ScrollView, TextInput, ActivityIndicator,
 } from 'react-native';
 import { useToast } from '@/components/toast-provider';
 import { useLanguage } from '@/context/language-context';
 import type { Store } from '@/context/store-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
-
-type PromoType = 'percent' | 'flat' | 'free_delivery';
-
-interface Promo {
-  id: string;
-  type: PromoType;
-  value: string;
-  minOrder: string;
-  validDays: number;
-  active: boolean;
-  createdAt: string;
-}
+import {
+  listPromotions, createPromotion, togglePromotion, deletePromotion,
+  type Promotion, type PromoType,
+} from '@/services/catalog-api';
 
 interface Props {
   visible: boolean;
@@ -31,8 +23,11 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
-  const [promos,    setPromos]    = useState<Promo[]>([]);
+
+  const [promos,    setPromos]    = useState<Promotion[]>([]);
+  const [loading,   setLoading]   = useState(false);
   const [creating,  setCreating]  = useState(false);
+  const [saving,    setSaving]    = useState(false);
   const [promoType, setPromoType] = useState<PromoType>('percent');
   const [value,     setValue]     = useState('');
   const [minOrder,  setMinOrder]  = useState('');
@@ -50,6 +45,21 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
     { days: 30, label: t('promo_1_month') },
   ];
 
+  const load = useCallback(async () => {
+    if (!store.id) return;
+    setLoading(true);
+    try {
+      const data = await listPromotions(store.id);
+      setPromos(data);
+    } catch {
+      showToast('Failed to load promotions', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [store.id]);
+
+  useEffect(() => { if (visible) load(); }, [visible, load]);
+
   function resetForm() {
     setCreating(false);
     setPromoType('percent');
@@ -58,33 +68,52 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
     setValidDays(7);
   }
 
-  function handleCreate() {
+  async function handleCreate() {
     if (promoType !== 'free_delivery' && !value.trim()) return;
-    setPromos(prev => [{
-      id: Date.now().toString(),
-      type: promoType,
-      value: value.trim(),
-      minOrder: minOrder.trim(),
-      validDays,
-      active: true,
-      createdAt: new Date().toISOString(),
-    }, ...prev]);
-    showToast(t('promo_created_toast'), 'success');
-    resetForm();
+    setSaving(true);
+    try {
+      const numValue   = promoType === 'flat'
+        ? Math.round(parseFloat(value || '0') * 100)  // rupees → paise
+        : parseInt(value || '0', 10);                  // percent stays as-is
+      const numMinOrder = minOrder.trim()
+        ? Math.round(parseFloat(minOrder) * 100)        // rupees → paise
+        : 0;
+      const promo = await createPromotion({
+        sellerId: store.id, type: promoType,
+        value: numValue, minOrder: numMinOrder, validDays,
+      });
+      setPromos(prev => [promo, ...prev]);
+      showToast(t('promo_created_toast'), 'success');
+      resetForm();
+    } catch {
+      showToast('Failed to create promotion', 'error');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function togglePromo(id: string) {
-    setPromos(prev => prev.map(p => p.id === id ? { ...p, active: !p.active } : p));
+  async function handleToggle(id: string, currentlyActive: boolean) {
+    try {
+      const updated = await togglePromotion(id, !currentlyActive);
+      setPromos(prev => prev.map(p => p.id === id ? updated : p));
+    } catch {
+      showToast('Failed to update promotion', 'error');
+    }
   }
 
-  function deletePromo(id: string) {
-    setPromos(prev => prev.filter(p => p.id !== id));
-    showToast(t('promo_removed_toast'), 'info');
+  async function handleDelete(id: string) {
+    try {
+      await deletePromotion(id);
+      setPromos(prev => prev.filter(p => p.id !== id));
+      showToast(t('promo_removed_toast'), 'info');
+    } catch {
+      showToast('Failed to delete promotion', 'error');
+    }
   }
 
-  function promoLabel(p: Promo): string {
+  function promoLabel(p: Promotion): string {
     if (p.type === 'percent') return `${p.value}% ${t('promo_off')}`;
-    if (p.type === 'flat')    return `₹${p.value} ${t('promo_off')}`;
+    if (p.type === 'flat')    return `₹${(p.value / 100).toLocaleString('en-IN')} ${t('promo_off')}`;
     return t('promo_type_free_del');
   }
 
@@ -191,10 +220,13 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                     <Text style={s.cancelTxt}>{t('decline_cancel')}</Text>
                   </Pressable>
                   <Pressable
-                    style={[s.createBtn, !canCreate && s.createBtnDisabled]}
+                    style={[s.createBtn, (!canCreate || saving) && s.createBtnDisabled]}
                     onPress={handleCreate}
-                    disabled={!canCreate}>
-                    <Text style={s.createBtnTxt}>{t('promo_create')}</Text>
+                    disabled={!canCreate || saving}>
+                    {saving
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={s.createBtnTxt}>{t('promo_create')}</Text>
+                    }
                   </Pressable>
                 </View>
               </View>
@@ -208,7 +240,11 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                   </View>
                 </Pressable>
 
-                {promos.length === 0 ? (
+                {loading ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                    <ActivityIndicator size="large" color="#2d7a47" />
+                  </View>
+                ) : promos.length === 0 ? (
                   <View style={s.emptyState}>
                     <Text style={{ fontSize: 48, marginBottom: 12 }}>🎁</Text>
                     <Text style={s.emptyTitle}>{t('promo_empty_title')}</Text>
@@ -220,8 +256,10 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                       <View key={promo.id} style={[s.promoCard, !promo.active && s.promoCardPaused]}>
                         <View style={s.promoLeft}>
                           <Text style={s.promoValue}>{promoLabel(promo)}</Text>
-                          {promo.minOrder ? (
-                            <Text style={s.promoDet}>{t('promo_min_order_label')}{promo.minOrder}</Text>
+                          {promo.minOrder > 0 ? (
+                            <Text style={s.promoDet}>
+                              {t('promo_min_order_label')}₹{(promo.minOrder / 100).toLocaleString('en-IN')}
+                            </Text>
                           ) : null}
                           <Text style={s.promoDet}>
                             {t('promo_valid_pre')} {promo.validDays} {t('promo_days')} ·{' '}
@@ -231,10 +269,10 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                           </Text>
                         </View>
                         <View style={s.promoActions}>
-                          <Pressable style={s.promoBtn} onPress={() => togglePromo(promo.id)}>
+                          <Pressable style={s.promoBtn} onPress={() => handleToggle(promo.id, promo.active)}>
                             <Text style={s.promoBtnTxt}>{promo.active ? t('promo_pause') : t('promo_resume')}</Text>
                           </Pressable>
-                          <Pressable style={[s.promoBtn, s.promoDeleteBtn]} onPress={() => deletePromo(promo.id)}>
+                          <Pressable style={[s.promoBtn, s.promoDeleteBtn]} onPress={() => handleDelete(promo.id)}>
                             <Text style={[s.promoBtnTxt, { color: '#dc2626' }]}>{t('promo_delete')}</Text>
                           </Pressable>
                         </View>
@@ -242,11 +280,6 @@ export function PromotionsModal({ visible, store, onClose }: Props) {
                     ))}
                   </View>
                 )}
-
-                <View style={s.syncNote}>
-                  <Text style={{ fontSize: 14 }}>ℹ️</Text>
-                  <Text style={s.syncNoteTxt}>{t('promo_sync_note')}</Text>
-                </View>
               </>
             )}
 
@@ -291,7 +324,6 @@ function makeStyles(c: AppColors) {
 
     body: { padding: 16 },
 
-    // Create form
     formCard: {
       backgroundColor: c.bgScreen,
       borderRadius: 16,
@@ -376,7 +408,6 @@ function makeStyles(c: AppColors) {
     createBtnDisabled: { opacity: 0.4 },
     createBtnTxt: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
-    // New promo button
     newPromoBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -393,12 +424,10 @@ function makeStyles(c: AppColors) {
     newPromoTxt: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
     newPromoSub: { fontSize: 11, color: c.primaryLight, marginTop: 1 },
 
-    // Empty state
     emptyState: { alignItems: 'center', paddingVertical: 32 },
     emptyTitle: { fontSize: 15, fontWeight: '700', color: c.textSub, marginBottom: 8 },
     emptySub: { fontSize: 12, color: c.textFaint, textAlign: 'center', lineHeight: 18, paddingHorizontal: 24 },
 
-    // Promo list
     promoList: { gap: 10, marginBottom: 16 },
     promoCard: {
       flexDirection: 'row',
@@ -424,16 +453,5 @@ function makeStyles(c: AppColors) {
     },
     promoDeleteBtn: { borderColor: '#fca5a5' },
     promoBtnTxt: { fontSize: 11, fontWeight: '600', color: c.textSub },
-
-    syncNote: {
-      flexDirection: 'row',
-      gap: 8,
-      backgroundColor: c.bgScreen,
-      borderRadius: 10,
-      padding: 12,
-      marginBottom: 24,
-      alignItems: 'flex-start',
-    },
-    syncNoteTxt: { flex: 1, fontSize: 11, color: c.textMuted, lineHeight: 16 },
   });
 }
