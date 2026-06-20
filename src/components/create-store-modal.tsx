@@ -227,7 +227,7 @@ export function CreateStoreModal({ visible, onCreated, onClose, existingTypes = 
                 onChangeText={setLocation}
                 onSelect={(detail) => {
                   setLocation(detail.location);
-                  if (detail.pincode) setPincode(detail.pincode);
+                  setPincode(detail.pincode);
                 }}
               />
             </Field>

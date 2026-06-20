@@ -80,7 +80,7 @@ function OnboardingScreen() {
         </View>
 
         <View style={s.badges}>
-          {['Free to join', 'No listing fees', '7% on delivery only'].map((b) => (
+          {['Free to join', 'No listing fees', 'Hassle free delivery'].map((b) => (
             <View key={b} style={s.badge}>
               <Text style={s.badgeTxt}>✓  {b}</Text>
             </View>
@@ -245,13 +245,14 @@ const s = StyleSheet.create({
   stepTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
   stepDesc:  { fontSize: 12, color: '#6b7280', marginTop: 3, lineHeight: 17 },
 
-  badges: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 28 },
+  badges: { flexDirection: 'row', gap: 8, marginBottom: 28 },
   badge: {
+    flex: 1, alignItems: 'center',
     backgroundColor: '#f0fdf4', borderRadius: 99,
-    paddingHorizontal: 12, paddingVertical: 5,
+    paddingHorizontal: 8, paddingVertical: 5,
     borderWidth: 1, borderColor: '#bbf7d0',
   },
-  badgeTxt: { fontSize: 11, fontWeight: '600', color: '#166534' },
+  badgeTxt: { fontSize: 11, fontWeight: '600', color: '#166534', textAlign: 'center' },
 
   footer: { gap: 10, paddingBottom: 8 },
   inviteBanner: {

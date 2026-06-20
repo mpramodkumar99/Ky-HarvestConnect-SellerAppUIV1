@@ -4,12 +4,13 @@ import {
 } from 'react-native';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
-const PLACES_KEY = 'AIzaSyAWcTKuepfygLZhGejYPhOIaIBuoRriSUw';
+const PLACES_KEY      = 'AIzaSyAWcTKuepfygLZhGejYPhOIaIBuoRriSUw';
 const AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
-const DETAILS_BASE_URL  = 'https://places.googleapis.com/v1/places';
+const DETAILS_BASE_URL = 'https://places.googleapis.com/v1/places';
+const NEARBY_URL       = 'https://places.googleapis.com/v1/places:searchNearby';
 
 interface Prediction {
-  placeId: string;
+  placeId:       string;
   mainText:      string;
   secondaryText: string;
 }
@@ -26,6 +27,33 @@ interface Props {
   placeholder?:  string;
   onSelect:      (detail: PlaceDetail) => void;
   onChangeText?: (text: string) => void;
+}
+
+type AddrComp = { longText: string; types: string[] };
+
+async function fetchNearbyPincode(lat: number, lng: number): Promise<string> {
+  try {
+    const res = await fetch(NEARBY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type':    'application/json',
+        'X-Goog-Api-Key':  PLACES_KEY,
+        'X-Goog-FieldMask': 'places.addressComponents',
+      },
+      body: JSON.stringify({
+        includedTypes: ['postal_code'],
+        locationRestriction: {
+          circle: { center: { latitude: lat, longitude: lng }, radius: 3000 },
+        },
+        maxResultCount: 1,
+      }),
+    });
+    const data  = await res.json();
+    const comps = (data.places?.[0]?.addressComponents ?? []) as AddrComp[];
+    return comps.find(c => c.types.includes('postal_code'))?.longText ?? '';
+  } catch {
+    return '';
+  }
 }
 
 export function PlacesSearchInput({ value, placeholder, onSelect, onChangeText }: Props) {
@@ -52,14 +80,15 @@ export function PlacesSearchInput({ value, placeholder, onSelect, onChangeText }
           'Content-Type':   'application/json',
           'X-Goog-Api-Key': PLACES_KEY,
         },
-        body: JSON.stringify({
-          input,
-          includedRegionCodes: ['in'],
-          languageCode:        'en',
-        }),
+        body: JSON.stringify({ input, includedRegionCodes: ['in'], languageCode: 'en' }),
       });
       const data = await res.json();
-      const raw  = (data.suggestions ?? []) as Array<{ placePrediction: { placeId: string; structuredFormat: { mainText: { text: string }; secondaryText: { text: string } } } }>;
+      const raw  = (data.suggestions ?? []) as Array<{
+        placePrediction: {
+          placeId: string;
+          structuredFormat: { mainText: { text: string }; secondaryText: { text: string } };
+        };
+      }>;
       setSuggestions(
         raw.map(s => ({
           placeId:       s.placePrediction.placeId,
@@ -78,37 +107,36 @@ export function PlacesSearchInput({ value, placeholder, onSelect, onChangeText }
     setSuggestions([]);
     setLoading(true);
     try {
-      const res  = await fetch(
-        `${DETAILS_BASE_URL}/${prediction.placeId}`,
-        {
-          headers: {
-            'X-Goog-Api-Key':  PLACES_KEY,
-            'X-Goog-FieldMask': 'displayName,formattedAddress,location,addressComponents',
-          },
+      const res  = await fetch(`${DETAILS_BASE_URL}/${prediction.placeId}`, {
+        headers: {
+          'X-Goog-Api-Key':   PLACES_KEY,
+          'X-Goog-FieldMask': 'displayName,formattedAddress,location,addressComponents',
         },
-      );
+      });
       const data = await res.json();
 
-      type AddrComp = { longText: string; types: string[] };
-      const comps  = (data.addressComponents ?? []) as AddrComp[];
-      const get    = (...types: string[]) =>
+      const comps    = (data.addressComponents ?? []) as AddrComp[];
+      const get      = (...types: string[]) =>
         comps.find(c => types.some(t => c.types.includes(t)))?.longText ?? '';
 
       const locality = get('locality', 'sublocality_level_1', 'sublocality');
       const district = get('administrative_area_level_3', 'administrative_area_level_2');
       const state    = get('administrative_area_level_1');
-      const pincode  = get('postal_code');
+      const lat      = data.location?.latitude  ?? 0;
+      const lng      = data.location?.longitude ?? 0;
+
+      // Primary: postal_code from address components
+      // Fallback: nearest postal_code via searchNearby (handles city-level selections)
+      let pincode = get('postal_code');
+      if (!pincode && lat && lng) {
+        pincode = await fetchNearbyPincode(lat, lng);
+      }
 
       const locationParts = [locality || data.displayName?.text, district, state].filter(Boolean);
       const location      = locationParts.join(', ');
 
       onChangeText?.(location);
-      onSelect({
-        location,
-        pincode,
-        lat: data.location?.latitude  ?? 0,
-        lng: data.location?.longitude ?? 0,
-      });
+      onSelect({ location, pincode, lat, lng });
     } catch {}
     setLoading(false);
   }
@@ -136,12 +164,8 @@ export function PlacesSearchInput({ value, placeholder, onSelect, onChangeText }
               key={p.placeId}
               style={[s.suggestion, i > 0 && s.suggestionBorder]}
               onPress={() => handleSelect(p)}>
-              <Text style={s.suggestionMain} numberOfLines={1}>
-                {p.mainText}
-              </Text>
-              <Text style={s.suggestionSub} numberOfLines={1}>
-                {p.secondaryText}
-              </Text>
+              <Text style={s.suggestionMain} numberOfLines={1}>{p.mainText}</Text>
+              <Text style={s.suggestionSub}  numberOfLines={1}>{p.secondaryText}</Text>
             </Pressable>
           ))}
         </View>
@@ -153,20 +177,20 @@ export function PlacesSearchInput({ value, placeholder, onSelect, onChangeText }
 function makeStyles(c: AppColors) {
   return StyleSheet.create({
     inputRow: {
-      flexDirection:   'row',
-      alignItems:      'center',
-      borderWidth:     1.5,
-      borderColor:     c.border,
-      borderRadius:    12,
-      backgroundColor: c.bgScreen,
+      flexDirection:     'row',
+      alignItems:        'center',
+      borderWidth:       1.5,
+      borderColor:       c.border,
+      borderRadius:      12,
+      backgroundColor:   c.bgScreen,
       paddingHorizontal: 12,
     },
     searchIcon: { fontSize: 15, marginRight: 8 },
     input: {
-      flex:          1,
+      flex:            1,
       paddingVertical: 11,
-      fontSize:      14,
-      color:         c.text,
+      fontSize:        14,
+      color:           c.text,
     },
     spinner: { marginLeft: 6 },
 
@@ -198,9 +222,9 @@ function makeStyles(c: AppColors) {
       color:      c.text,
     },
     suggestionSub: {
-      fontSize:   11,
-      color:      c.textFaint,
-      marginTop:  2,
+      fontSize:  11,
+      color:     c.textFaint,
+      marginTop: 2,
     },
   });
 }
