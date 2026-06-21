@@ -698,6 +698,7 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
               keyboardType="number-pad"
               maxLength={6}
               autoFocus
+              textContentType="oneTimeCode"
               style={o.hiddenInput}
               caretHidden
             />
