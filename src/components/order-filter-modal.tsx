@@ -5,8 +5,11 @@ import type { PaymentMethod } from '@/services/order-api';
 import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
+export type DateRange = 'today' | 'week' | 'month' | null;
+
 export interface OrderFilters {
   paymentMethod: PaymentMethod | null;
+  dateRange:     DateRange;
 }
 
 interface Props {
@@ -29,15 +32,26 @@ export function OrderFilterModal({ visible, filters, onClose, onApply }: Props) 
     { value: 'wallet', label: t('filter_wallet'), icon: '👛' },
   ];
 
+  const DATE_OPTIONS: { value: DateRange; label: string; icon: string }[] = [
+    { value: null,    label: 'All time',    icon: '🗂️' },
+    { value: 'today', label: 'Today',       icon: '📅' },
+    { value: 'week',  label: 'This week',   icon: '🗓️' },
+    { value: 'month', label: 'This month',  icon: '📆' },
+  ];
+
   function handleSelect(method: PaymentMethod | null) {
     onApply({ ...filters, paymentMethod: method });
   }
 
-  function handleClear() {
-    onApply({ paymentMethod: null });
+  function handleDateSelect(range: DateRange) {
+    onApply({ ...filters, dateRange: range });
   }
 
-  const hasActive = filters.paymentMethod !== null;
+  function handleClear() {
+    onApply({ paymentMethod: null, dateRange: null });
+  }
+
+  const hasActive = filters.paymentMethod !== null || filters.dateRange !== null;
 
   return (
     <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
@@ -53,7 +67,23 @@ export function OrderFilterModal({ visible, filters, onClose, onApply }: Props) 
           </View>
 
           <View style={s.body}>
-            <Text style={s.groupLabel}>{t('filter_payment_label')}</Text>
+            <Text style={s.groupLabel}>DATE RANGE</Text>
+            <View style={s.optionGrid}>
+              {DATE_OPTIONS.map((opt) => {
+                const active = filters.dateRange === opt.value;
+                return (
+                  <Pressable
+                    key={String(opt.value)}
+                    style={[s.optionChip, active && s.optionChipActive]}
+                    onPress={() => handleDateSelect(opt.value)}>
+                    <Text style={{ fontSize: 18 }}>{opt.icon}</Text>
+                    <Text style={[s.optionLabel, active && s.optionLabelActive]}>{opt.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[s.groupLabel, { marginTop: 16 }]}>{t('filter_payment_label')}</Text>
             <View style={s.optionGrid}>
               {PAYMENT_OPTIONS.map((opt) => {
                 const active = filters.paymentMethod === opt.value;
