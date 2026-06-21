@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert, Linking, RefreshControl, ScrollView,
-  StyleSheet, Text, View, Pressable,
+  StyleSheet, Text, TextInput, View, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -35,7 +35,8 @@ export default function OrdersScreen() {
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
   const [declineOrder, setDeclineOrder] = useState<Order | null>(null);
   const [filterVisible, setFilterVisible] = useState(false);
-  const [filters, setFilters] = useState<OrderFilters>({ paymentMethod: null });
+  const [filters, setFilters] = useState<OrderFilters>({ paymentMethod: null, dateRange: null });
+  const [search, setSearch]   = useState('');
 
   const TABS: { label: string; value: SellerTab }[] = [
     { label: t('orders_new'),        value: 'new' },
@@ -77,9 +78,26 @@ export default function OrdersScreen() {
     setNewOrderCount(tabCount('new'));
   }, [orders, setNewOrderCount]);
 
+  function inDateRange(iso: string): boolean {
+    if (!filters.dateRange) return true;
+    const d = new Date(iso).getTime();
+    const now = Date.now();
+    if (filters.dateRange === 'today') return new Date(iso).toDateString() === new Date().toDateString();
+    if (filters.dateRange === 'week')  return d >= now - 7  * 86_400_000;
+    if (filters.dateRange === 'month') return d >= now - 30 * 86_400_000;
+    return true;
+  }
+
+  const q = search.trim().toLowerCase();
   const filtered = orders
     .filter((o) => toSellerTab(o.status) === activeTab)
-    .filter((o) => !filters.paymentMethod || o.paymentMethod === filters.paymentMethod);
+    .filter((o) => !filters.paymentMethod || o.paymentMethod === filters.paymentMethod)
+    .filter((o) => inDateRange(o.createdAt))
+    .filter((o) => !q || (
+      o.id.toLowerCase().includes(q) ||
+      o.buyerName.toLowerCase().includes(q) ||
+      o.items.some(i => i.productName.toLowerCase().includes(q))
+    ));
 
   function updateOrderInState(updated: Order) {
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
@@ -152,7 +170,7 @@ export default function OrdersScreen() {
     Linking.openURL(`tel:${order.buyerPhone}`);
   }
 
-  const hasActiveFilter = filters.paymentMethod !== null;
+  const hasActiveFilter = filters.paymentMethod !== null || filters.dateRange !== null;
 
   return (
     <View style={s.screen}>
@@ -207,6 +225,25 @@ export default function OrdersScreen() {
               </Pressable>
             </View>
           </View>
+
+          {/* Search bar */}
+          <View style={s.searchRow}>
+            <Text style={s.searchIcon}>🔍</Text>
+            <TextInput
+              style={s.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search order ID, buyer, product…"
+              placeholderTextColor="rgba(255,255,255,0.5)"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            {search.length > 0 && (
+              <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                <Text style={s.searchClear}>✕</Text>
+              </Pressable>
+            )}
+          </View>
         </SafeAreaView>
       </View>
 
@@ -236,13 +273,15 @@ export default function OrdersScreen() {
         </ScrollView>
       </View>
 
-      {/* Filter active hint */}
-      {hasActiveFilter && (
+      {/* Filter / search active hint */}
+      {(hasActiveFilter || search.trim()) && (
         <View style={s.filterHint}>
           <Text style={s.filterHintTxt}>
-            {t('orders_filter_hint')} {payMethodLabel(filters.paymentMethod!).replace(/^\S+ /, '')}
+            {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+            {filters.paymentMethod ? ` · ${payMethodLabel(filters.paymentMethod).replace(/^\S+ /, '')}` : ''}
+            {filters.dateRange ? ` · ${filters.dateRange === 'today' ? 'Today' : filters.dateRange === 'week' ? 'This week' : 'This month'}` : ''}
           </Text>
-          <Pressable onPress={() => setFilters({ paymentMethod: null })}>
+          <Pressable onPress={() => { setFilters({ paymentMethod: null, dateRange: null }); setSearch(''); }}>
             <Text style={s.filterHintClear}>{t('orders_filter_clear')}</Text>
           </Pressable>
         </View>
@@ -407,6 +446,15 @@ function makeStyles(c: AppColors) {
       borderRadius: 4,
       backgroundColor: '#f59e0b',
     },
+    searchRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+      marginTop: 10,
+    },
+    searchIcon: { fontSize: 14 },
+    searchInput: { flex: 1, fontSize: 13, color: '#fff', paddingVertical: 0 },
+    searchClear: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '700' },
 
     tabsWrap: { backgroundColor: c.bg, borderBottomWidth: 1, borderBottomColor: c.border },
     tabs: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },

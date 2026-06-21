@@ -88,6 +88,7 @@ export default function ProfileScreen() {
   const [iconPickerOpen,   setIconPickerOpen]   = useState(false);
   const [productCount, setProductCount]         = useState<number | null>(null);
   const [orderCount, setOrderCount]             = useState<number | null>(null);
+  const [gmv,          setGmv]                 = useState<number | null>(null);
   const [customZoneData,   setCustomZoneData]   = useState<CustomZoneData | null>(null);
   const [storePincodeInfo, setStorePincodeInfo] = useState<PincodeInfo | null>(null);
 
@@ -101,7 +102,7 @@ export default function ProfileScreen() {
     { key: 'promotions',          icon: '🎁', label: t('menu_promotions'),        desc: t('menu_promotions_desc') },
     { key: 'social_handles',      icon: '📱', label: t('menu_social_handles'),    desc: t('menu_social_handles_desc') },
     { key: 'share_store',         icon: '📣', label: t('menu_share_store'),       desc: t('menu_share_store_desc') },
-    { key: 'reviews',             icon: '⭐', label: t('menu_reviews'),           desc: t('menu_reviews_desc'), badge: '2 new' },
+    { key: 'reviews',             icon: '⭐', label: t('menu_reviews'),           desc: t('menu_reviews_desc') },
     { key: 'help_support',        icon: '❓', label: t('menu_help'),              desc: t('menu_help_desc') },
     { key: 'app_settings',        icon: '⚙️', label: t('menu_app_settings'),     desc: t('menu_app_settings_desc') },
   ];
@@ -114,8 +115,14 @@ export default function ProfileScreen() {
       .then((ps) => setProductCount(ps.length))
       .catch(() => setProductCount(null));
     listOrders({ sellerId: activeStore.id })
-      .then((os) => setOrderCount(os.length))
-      .catch(() => setOrderCount(null));
+      .then((os) => {
+        setOrderCount(os.length);
+        const deliveredTotal = os
+          .filter(o => o.status === 'delivered')
+          .reduce((sum, o) => sum + o.total, 0);
+        setGmv(Math.round(deliveredTotal / 100));
+      })
+      .catch(() => { setOrderCount(null); setGmv(null); });
     loadCustomZoneData(activeStore.id);
     lookupPincode(activeStore.pincode).then(setStorePincodeInfo).catch(() => setStorePincodeInfo(null));
   }, [activeStore.id]);
@@ -199,11 +206,18 @@ export default function ProfileScreen() {
     ? `${owner.name} · Seller since ${new Date(owner.joinedAt ?? owner.invitedAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`
     : 'HarvestConnect Seller';
 
+  function formatGmv(rupees: number): string {
+    if (rupees >= 1_00_00_000) return `₹${(rupees / 1_00_00_000).toFixed(1)}Cr`;
+    if (rupees >= 1_00_000)    return `₹${(rupees / 1_00_000).toFixed(1)}L`;
+    if (rupees >= 1_000)       return `₹${(rupees / 1_000).toFixed(1)}K`;
+    return `₹${rupees.toLocaleString('en-IN')}`;
+  }
+
   const storeStats = [
     { label: t('profile_stat_products'), value: productCount !== null ? String(productCount) : '…', icon: '🌾' },
     { label: t('profile_stat_orders'),   value: orderCount   !== null ? String(orderCount)   : '…', icon: '📦' },
-    { label: t('profile_stat_rating'),   value: '4.8★',  icon: '⭐' },
-    { label: t('profile_stat_gmv'),      value: '₹6.8L', icon: '💰' },
+    { label: t('profile_stat_rating'),   value: '—',                                                 icon: '⭐' },
+    { label: t('profile_stat_gmv'),      value: gmv !== null ? formatGmv(gmv) : '…',                icon: '💰' },
   ];
 
   return (
