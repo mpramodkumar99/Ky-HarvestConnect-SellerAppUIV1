@@ -104,6 +104,13 @@ export default function OrdersScreen() {
   }
 
   async function handleAccept(order: Order) {
+    if (activeStore.vacationMode) {
+      Alert.alert(
+        'Vacation Mode is ON',
+        'Turn off Vacation Mode first to accept new orders. Go to Profile → Vacation Mode.',
+      );
+      return;
+    }
     stopAlert();
     setActionLoading(order.id);
     try {

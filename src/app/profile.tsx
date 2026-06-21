@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Share, ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, ImageBackground, Image } from 'react-native';
+import { Modal, Share, ScrollView, Switch, View, Text, Pressable, StyleSheet, ActivityIndicator, ImageBackground, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -59,7 +59,7 @@ type MenuItem = {
 
 
 export default function ProfileScreen() {
-  const { stores, activeStore, teamMembers, loadingTeam, pendingInvites, setActiveStore, refreshTeam, refreshSeller } = useStore();
+  const { stores, activeStore, teamMembers, loadingTeam, pendingInvites, setActiveStore, refreshTeam, refreshSeller, toggleVacation } = useStore();
   const { logout, session } = useAuth();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const router = useRouter();
@@ -189,6 +189,18 @@ export default function ProfileScreen() {
     }
     if (item.route) { router.push(item.route as string); return; }
     if (item.comingSoon) { showToast(`${item.label} is coming soon.`, 'info'); }
+  }
+
+  async function handleToggleVacation(enabled: boolean) {
+    try {
+      await toggleVacation(enabled);
+      showToast(
+        enabled ? 'Vacation mode ON — new orders paused.' : 'Vacation mode OFF — store is live!',
+        enabled ? 'info' : 'success',
+      );
+    } catch {
+      showToast('Failed to update vacation mode. Try again.', 'error');
+    }
   }
 
   function handleLogout() {
@@ -439,6 +451,39 @@ export default function ProfileScreen() {
           </View>
         </View>
       </View>
+
+      {/* Vacation Mode */}
+      {activeStore.role === 'owner' && (
+        <View style={s.vacationWrap}>
+          <View style={s.vacationCard}>
+            <View style={s.vacationRow}>
+              <Text style={{ fontSize: 22 }}>🏖️</Text>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={s.vacationTitle}>Vacation Mode</Text>
+                <Text style={s.vacationSub}>
+                  {activeStore.vacationMode
+                    ? 'Store paused — buyers cannot place new orders.'
+                    : 'Pause your store while you are away.'}
+                </Text>
+              </View>
+              <Switch
+                value={activeStore.vacationMode}
+                onValueChange={handleToggleVacation}
+                thumbColor="#fff"
+                trackColor={{ false: '#d1d5db', true: '#f59e0b' }}
+                ios_backgroundColor="#d1d5db"
+              />
+            </View>
+            {activeStore.vacationMode && (
+              <View style={s.vacationAlert}>
+                <Text style={s.vacationAlertTxt}>
+                  ⚠️  Your store is on vacation. New orders are paused until you turn this off.
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Store Coverage */}
       <View style={s.coverageWrap}>
@@ -928,6 +973,25 @@ function makeStyles(c: AppColors) {
       paddingVertical: 4,
     },
     changeTxt: { fontSize: 11, color: c.textSub, fontWeight: '600' },
+
+    vacationWrap: { paddingHorizontal: 16, marginBottom: 12 },
+    vacationCard: {
+      backgroundColor: c.bg,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1.5,
+      borderColor: '#f59e0b',
+    },
+    vacationRow: { flexDirection: 'row', alignItems: 'center' },
+    vacationTitle: { fontSize: 14, fontWeight: '700', color: c.text },
+    vacationSub: { fontSize: 12, color: c.textMuted, marginTop: 2 },
+    vacationAlert: {
+      marginTop: 10,
+      backgroundColor: '#fef3c7',
+      borderRadius: 8,
+      padding: 10,
+    },
+    vacationAlertTxt: { fontSize: 12, color: '#92400e', fontWeight: '500' },
 
     coverageWrap: { paddingHorizontal: 16, marginBottom: 12 },
     coverageCard: {
