@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Share, ScrollView, Switch, View, Text, Pressable, StyleSheet, ActivityIndicator, ImageBackground, Image } from 'react-native';
+import { Modal, Share, ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator, ImageBackground, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -59,7 +59,7 @@ type MenuItem = {
 
 
 export default function ProfileScreen() {
-  const { stores, activeStore, teamMembers, loadingTeam, pendingInvites, setActiveStore, refreshTeam, refreshSeller, toggleVacation } = useStore();
+  const { stores, activeStore, teamMembers, loadingTeam, pendingInvites, setActiveStore, refreshTeam, refreshSeller } = useStore();
   const { logout, session } = useAuth();
   const perms = ROLE_PERMISSIONS[activeStore.role];
   const router = useRouter();
@@ -189,18 +189,6 @@ export default function ProfileScreen() {
     }
     if (item.route) { router.push(item.route as string); return; }
     if (item.comingSoon) { showToast(`${item.label} is coming soon.`, 'info'); }
-  }
-
-  async function handleToggleVacation(enabled: boolean) {
-    try {
-      await toggleVacation(enabled);
-      showToast(
-        enabled ? 'Vacation mode ON — new orders paused.' : 'Vacation mode OFF — store is live!',
-        enabled ? 'info' : 'success',
-      );
-    } catch {
-      showToast('Failed to update vacation mode. Try again.', 'error');
-    }
   }
 
   function handleLogout() {
@@ -452,39 +440,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Vacation Mode */}
-      {activeStore.role === 'owner' && (
-        <View style={s.vacationWrap}>
-          <View style={s.vacationCard}>
-            <View style={s.vacationRow}>
-              <Text style={{ fontSize: 22 }}>🏖️</Text>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={s.vacationTitle}>Vacation Mode</Text>
-                <Text style={s.vacationSub}>
-                  {activeStore.vacationMode
-                    ? 'Store paused — buyers cannot place new orders.'
-                    : 'Pause your store while you are away.'}
-                </Text>
-              </View>
-              <Switch
-                value={activeStore.vacationMode}
-                onValueChange={handleToggleVacation}
-                thumbColor="#fff"
-                trackColor={{ false: '#d1d5db', true: '#f59e0b' }}
-                ios_backgroundColor="#d1d5db"
-              />
-            </View>
-            {activeStore.vacationMode && (
-              <View style={s.vacationAlert}>
-                <Text style={s.vacationAlertTxt}>
-                  ⚠️  Your store is on vacation. New orders are paused until you turn this off.
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
-
       {/* Store Coverage */}
       <View style={s.coverageWrap}>
         <View style={s.coverageCard}>
@@ -641,9 +596,21 @@ export default function ProfileScreen() {
                     )}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                    <View style={[s.storeStatusPill, store.status === 'live' ? s.storeStatusLive : s.storeStatusOffline]}>
-                      <Text style={[s.storeStatusTxt, store.status === 'live' ? s.storeStatusLiveTxt : s.storeStatusOfflineTxt]}>
-                        {store.status === 'live' ? t('profile_store_live') : t('profile_store_offline')}
+                    <View style={[
+                      s.storeStatusPill,
+                      store.status === 'live'     ? s.storeStatusLive :
+                      store.status === 'vacation' ? s.storeStatusVacation :
+                      s.storeStatusOffline,
+                    ]}>
+                      <Text style={[
+                        s.storeStatusTxt,
+                        store.status === 'live'     ? s.storeStatusLiveTxt :
+                        store.status === 'vacation' ? s.storeStatusVacationTxt :
+                        s.storeStatusOfflineTxt,
+                      ]}>
+                        {store.status === 'live'     ? t('profile_store_live') :
+                         store.status === 'vacation' ? '🏖️ Vacation' :
+                         t('profile_store_offline')}
                       </Text>
                     </View>
                     <Text style={s.storeCardMeta}>{store.productCount} products · {store.ordersToday} orders today</Text>
@@ -974,25 +941,6 @@ function makeStyles(c: AppColors) {
     },
     changeTxt: { fontSize: 11, color: c.textSub, fontWeight: '600' },
 
-    vacationWrap: { paddingHorizontal: 16, marginBottom: 12 },
-    vacationCard: {
-      backgroundColor: c.bg,
-      borderRadius: 14,
-      padding: 14,
-      borderWidth: 1.5,
-      borderColor: '#f59e0b',
-    },
-    vacationRow: { flexDirection: 'row', alignItems: 'center' },
-    vacationTitle: { fontSize: 14, fontWeight: '700', color: c.text },
-    vacationSub: { fontSize: 12, color: c.textMuted, marginTop: 2 },
-    vacationAlert: {
-      marginTop: 10,
-      backgroundColor: '#fef3c7',
-      borderRadius: 8,
-      padding: 10,
-    },
-    vacationAlertTxt: { fontSize: 12, color: '#92400e', fontWeight: '500' },
-
     coverageWrap: { paddingHorizontal: 16, marginBottom: 12 },
     coverageCard: {
       backgroundColor: c.bg,
@@ -1175,11 +1123,13 @@ function makeStyles(c: AppColors) {
       paddingVertical: 2,
     },
     storeStatusPill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
-    storeStatusLive:    { backgroundColor: '#dcfce7' },
-    storeStatusOffline: { backgroundColor: c.bgSubtle },
+    storeStatusLive:     { backgroundColor: '#dcfce7' },
+    storeStatusOffline:  { backgroundColor: c.bgSubtle },
+    storeStatusVacation: { backgroundColor: '#fef3c7' },
     storeStatusTxt:        { fontSize: 10, fontWeight: '700' },
-    storeStatusLiveTxt:    { color: '#166534' },
-    storeStatusOfflineTxt: { color: c.textMuted },
+    storeStatusLiveTxt:     { color: '#166534' },
+    storeStatusOfflineTxt:  { color: c.textMuted },
+    storeStatusVacationTxt: { color: '#92400e' },
 
     inviteBtn: {
       backgroundColor: c.primaryBg,

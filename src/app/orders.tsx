@@ -104,10 +104,10 @@ export default function OrdersScreen() {
   }
 
   async function handleAccept(order: Order) {
-    if (activeStore.vacationMode) {
+    if (activeStore.status !== 'live') {
       Alert.alert(
-        'Vacation Mode is ON',
-        'Turn off Vacation Mode first to accept new orders. Go to Profile → Vacation Mode.',
+        activeStore.status === 'vacation' ? 'Store on Vacation' : 'Store is Offline',
+        'Change your store status to Live first to accept new orders. Go to Profile → Edit Store.',
       );
       return;
     }
