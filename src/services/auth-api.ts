@@ -32,11 +32,11 @@ export interface AuthSession {
 }
 
 export async function requestOtp(phone: string): Promise<{ message: string; phone: string }> {
-  return post('/v1/auth/otp/request', { phone });
+  return post('/v1/auth/otp/request', { phone, userType: 'seller' });
 }
 
 export async function verifyOtp(phone: string, code: string): Promise<AuthSession> {
-  return post('/v1/auth/otp/verify', { phone, code });
+  return post('/v1/auth/otp/verify', { phone, code, userType: 'seller' });
 }
 
 export async function verifyToken(
