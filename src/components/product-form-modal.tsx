@@ -838,7 +838,7 @@ function makeStyles(c: AppColors) {
     fieldHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
     customAreaBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: c.border, backgroundColor: c.bgSubtle },
     customAreaBtnActive: { backgroundColor: '#1e40af', borderColor: '#1e40af' },
-    customAreaBtnTxt: { fontSize: 12, color: c.textSecondary },
+    customAreaBtnTxt: { fontSize: 12, color: c.textSub },
     customAreaBtnTxtActive: { color: '#fff' },
     customAreaNote: {
       borderWidth: 1,

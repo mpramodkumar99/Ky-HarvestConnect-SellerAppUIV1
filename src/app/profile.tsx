@@ -187,7 +187,7 @@ export default function ProfileScreen() {
       });
       return;
     }
-    if (item.route) { router.push(item.route as string); return; }
+    if (item.route) { router.push(item.route as any); return; }
     if (item.comingSoon) { showToast(`${item.label} is coming soon.`, 'info'); }
   }
 
@@ -834,7 +834,7 @@ function makeStyles(c: AppColors) {
       borderBottomRightRadius: 24,
     },
     bannerDim: {
-      ...StyleSheet.absoluteFillObject,
+      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
       backgroundColor: 'rgba(0,0,0,0.42)',
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24,

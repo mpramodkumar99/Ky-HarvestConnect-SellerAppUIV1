@@ -40,16 +40,17 @@ export function MemberActionModal({ visible, member, sellerId, onClose, onUpdate
   }
 
   if (!member) return null;
+  const m = member;
 
-  const isOwner    = member.role === 'owner';
-  const roleChanged = !isOwner && role !== member.role;
+  const isOwner    = m.role === 'owner';
+  const roleChanged = !isOwner && role !== m.role;
 
   async function handleSaveRole() {
     if (!roleChanged || saving) return;
     setSaving(true);
     setError('');
     try {
-      await updateMemberRole(sellerId, member.id, { role });
+      await updateMemberRole(sellerId, m.id, { role });
       onUpdated();
       onClose();
     } catch (err) {
@@ -64,7 +65,7 @@ export function MemberActionModal({ visible, member, sellerId, onClose, onUpdate
     setRemoving(true);
     setError('');
     try {
-      await removeMember(sellerId, member.id);
+      await removeMember(sellerId, m.id);
       onUpdated();
       onClose();
     } catch (err) {
