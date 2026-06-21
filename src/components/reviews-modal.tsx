@@ -1,38 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Modal, View, Text, Pressable, StyleSheet, ScrollView,
+  TextInput, ActivityIndicator, Alert,
 } from 'react-native';
 import { useToast } from '@/components/toast-provider';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
-
-interface Review {
-  id: string;
-  buyer: string;
-  avatar: string;
-  rating: number;
-  text: string;
-  product: string;
-  date: string;
-  replied: boolean;
-}
-
-const REVIEWS: Review[] = [
-  { id: 'r1', buyer: 'Ravi Kumar',    avatar: 'RK', rating: 5, text: 'Super fresh! Delivered on time and the quality was excellent. Will definitely order again.', product: 'Fresh Cow Milk 1L',    date: '2026-06-12', replied: false },
-  { id: 'r2', buyer: 'Sunita Meena',  avatar: 'SM', rating: 4, text: 'Good product but packaging could be better. The curd was thick and tasty.',                  product: 'Thick Curd 500g',     date: '2026-06-11', replied: false },
-  { id: 'r3', buyer: 'Prasad Reddy',  avatar: 'PR', rating: 5, text: 'Amazing quality! Pure and fresh. Best seller in Nizamabad.',                                  product: 'A2 Milk 500ml',       date: '2026-06-10', replied: true  },
-  { id: 'r4', buyer: 'Lakshmi Devi',  avatar: 'LD', rating: 3, text: 'Delivery was 2 hours late. Product quality is good though.',                                   product: 'Paneer 250g',         date: '2026-06-09', replied: false },
-  { id: 'r5', buyer: 'Venkat Babu',   avatar: 'VB', rating: 5, text: 'Pure cow ghee, worth every rupee. My family loved it!',                                        product: 'Pure Cow Ghee 500g',  date: '2026-06-08', replied: true  },
-  { id: 'r6', buyer: 'Anitha Rao',    avatar: 'AR', rating: 4, text: 'Good flavour but I expected a slightly larger quantity for the price.',                         product: 'Fresh Butter 200g',   date: '2026-06-07', replied: false },
-];
-
-const STAR_DIST: { stars: number; count: number }[] = [
-  { stars: 5, count: 280 },
-  { stars: 4, count: 42  },
-  { stars: 3, count: 12  },
-  { stars: 2, count: 5   },
-  { stars: 1, count: 3   },
-];
-const TOTAL_REVIEWS = STAR_DIST.reduce((s, d) => s + d.count, 0);
+import { listReviews, replyToReview, type Review } from '@/services/catalog-api';
 
 type Filter = 'All' | '5★' | '4★' | '3★' | 'Unresponded';
 const FILTERS: Filter[] = ['All', '5★', '4★', '3★', 'Unresponded'];
@@ -47,22 +20,81 @@ function Stars({ rating, size = 13, inactiveColor }: { rating: number; size?: nu
   );
 }
 
+function initials(name: string): string {
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function avgRating(reviews: Review[]): number {
+  if (reviews.length === 0) return 0;
+  return reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+}
+
+function starDist(reviews: Review[]): { stars: number; count: number }[] {
+  return [5, 4, 3, 2, 1].map(stars => ({
+    stars,
+    count: reviews.filter(r => r.rating === stars).length,
+  }));
+}
+
 interface Props {
   visible: boolean;
+  sellerId: string;
   onClose: () => void;
 }
 
-export function ReviewsModal({ visible, onClose }: Props) {
+export function ReviewsModal({ visible, sellerId, onClose }: Props) {
   const { showToast } = useToast();
   const c = useAppColors();
   const s = makeStyles(c);
-  const [filter, setFilter] = useState<Filter>('All');
 
-  const filtered = REVIEWS.filter((r) => {
-    if (filter === 'All')        return true;
-    if (filter === 'Unresponded') return !r.replied;
+  const [reviews,    setReviews]    = useState<Review[]>([]);
+  const [loading,    setLoading]    = useState(false);
+  const [filter,     setFilter]     = useState<Filter>('All');
+  const [replyingId, setReplyingId] = useState<string | null>(null);
+  const [replyText,  setReplyText]  = useState('');
+  const [savingId,   setSavingId]   = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!sellerId) return;
+    setLoading(true);
+    try {
+      const data = await listReviews(sellerId);
+      setReviews(data);
+    } catch {
+      showToast('Failed to load reviews', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [sellerId]);
+
+  useEffect(() => { if (visible) load(); }, [visible, load]);
+
+  async function handleReply(id: string) {
+    if (!replyText.trim()) return;
+    setSavingId(id);
+    try {
+      const updated = await replyToReview(id, replyText.trim());
+      setReviews(prev => prev.map(r => r.id === id ? updated : r));
+      setReplyingId(null);
+      setReplyText('');
+      showToast('Reply sent', 'success');
+    } catch {
+      showToast('Failed to send reply', 'error');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  const avg  = avgRating(reviews);
+  const dist = starDist(reviews);
+
+  const filtered = reviews.filter((r) => {
+    if (filter === 'All')         return true;
+    if (filter === 'Unresponded') return !r.reply;
     return r.rating === parseInt(filter[0]);
   });
+
+  const unrespondedCount = reviews.filter(r => !r.reply).length;
 
   return (
     <Modal
@@ -82,105 +114,133 @@ export function ReviewsModal({ visible, onClose }: Props) {
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-
-            {/* Rating hero */}
-            <View style={s.hero}>
-              <View style={s.heroLeft}>
-                <Text style={s.heroScore}>4.8</Text>
-                <Stars rating={5} size={16} inactiveColor="rgba(255,255,255,0.3)" />
-                <Text style={s.heroCount}>{TOTAL_REVIEWS} reviews</Text>
-              </View>
-              <View style={s.distCol}>
-                {STAR_DIST.map((d) => {
-                  const pct = (d.count / TOTAL_REVIEWS) * 100;
-                  return (
-                    <View key={d.stars} style={s.distRow}>
-                      <Text style={s.distLabel}>{d.stars}★</Text>
-                      <View style={s.distTrack}>
-                        <View style={[s.distFill, { width: `${pct}%` as any }]} />
-                      </View>
-                      <Text style={s.distCount}>{d.count}</Text>
-                    </View>
-                  );
-                })}
-              </View>
+          {loading ? (
+            <View style={{ alignItems: 'center', paddingVertical: 48 }}>
+              <ActivityIndicator size="large" color="#2d7a47" />
             </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
 
-            {/* Filter chips */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={s.filterRow}
-              contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
-              {FILTERS.map((f) => (
-                <Pressable
-                  key={f}
-                  style={[s.filterChip, filter === f && s.filterChipActive]}
-                  onPress={() => setFilter(f)}>
-                  <Text style={[s.filterTxt, filter === f && s.filterTxtActive]}>{f}</Text>
-                  {f === 'Unresponded' && (
-                    <View style={s.filterBadge}>
-                      <Text style={s.filterBadgeTxt}>2</Text>
-                    </View>
-                  )}
-                </Pressable>
-              ))}
-            </ScrollView>
-
-            {/* Review list */}
-            <View style={s.reviewList}>
-              {filtered.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-                  <Text style={{ fontSize: 13, color: c.textFaint }}>No reviews in this category</Text>
+              {/* Rating hero */}
+              <View style={s.hero}>
+                <View style={s.heroLeft}>
+                  <Text style={s.heroScore}>{avg > 0 ? avg.toFixed(1) : '–'}</Text>
+                  <Stars rating={Math.round(avg)} size={16} inactiveColor="rgba(255,255,255,0.3)" />
+                  <Text style={s.heroCount}>{reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}</Text>
                 </View>
-              ) : (
-                filtered.map((review) => (
-                  <View key={review.id} style={s.reviewCard}>
-                    <View style={s.reviewHeader}>
-                      <View style={s.reviewAvatar}>
-                        <Text style={s.reviewAvatarTxt}>{review.avatar}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={s.reviewBuyer}>{review.buyer}</Text>
-                          <Text style={s.reviewDate}>
-                            {new Date(review.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                          </Text>
+                <View style={s.distCol}>
+                  {dist.map((d) => {
+                    const pct = reviews.length > 0 ? (d.count / reviews.length) * 100 : 0;
+                    return (
+                      <View key={d.stars} style={s.distRow}>
+                        <Text style={s.distLabel}>{d.stars}★</Text>
+                        <View style={s.distTrack}>
+                          <View style={[s.distFill, { width: `${pct}%` as any }]} />
                         </View>
-                        <Stars rating={review.rating} inactiveColor={c.border} />
-                        <Text style={s.reviewProduct}>{review.product}</Text>
+                        <Text style={s.distCount}>{d.count}</Text>
                       </View>
-                    </View>
-                    <Text style={s.reviewText}>{review.text}</Text>
-                    <View style={s.reviewFooter}>
-                      {review.replied ? (
-                        <View style={s.repliedTag}>
-                          <Text style={s.repliedTxt}>✓ Replied</Text>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Filter chips */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={s.filterRow}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 16 }}>
+                {FILTERS.map((f) => (
+                  <Pressable
+                    key={f}
+                    style={[s.filterChip, filter === f && s.filterChipActive]}
+                    onPress={() => setFilter(f)}>
+                    <Text style={[s.filterTxt, filter === f && s.filterTxtActive]}>{f}</Text>
+                    {f === 'Unresponded' && unrespondedCount > 0 && (
+                      <View style={s.filterBadge}>
+                        <Text style={s.filterBadgeTxt}>{unrespondedCount}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Review list */}
+              <View style={s.reviewList}>
+                {filtered.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                    <Text style={{ fontSize: 36, marginBottom: 12 }}>📝</Text>
+                    <Text style={{ fontSize: 13, color: c.textFaint }}>No reviews in this category</Text>
+                  </View>
+                ) : (
+                  filtered.map((review) => (
+                    <View key={review.id} style={s.reviewCard}>
+                      <View style={s.reviewHeader}>
+                        <View style={s.reviewAvatar}>
+                          <Text style={s.reviewAvatarTxt}>{initials(review.buyerName)}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={s.reviewBuyer}>{review.buyerName}</Text>
+                            <Text style={s.reviewDate}>
+                              {new Date(review.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                            </Text>
+                          </View>
+                          <Stars rating={review.rating} inactiveColor={c.border} />
+                        </View>
+                      </View>
+                      <Text style={s.reviewText}>{review.text}</Text>
+
+                      {review.reply ? (
+                        <View style={s.replyBubble}>
+                          <Text style={s.replyLabel}>Your reply</Text>
+                          <Text style={s.replyTxt}>{review.reply}</Text>
+                        </View>
+                      ) : replyingId === review.id ? (
+                        <View style={s.replyForm}>
+                          <TextInput
+                            style={s.replyInput}
+                            value={replyText}
+                            onChangeText={setReplyText}
+                            placeholder="Write your reply..."
+                            placeholderTextColor={c.textFaint}
+                            multiline
+                            autoFocus
+                          />
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            <Pressable
+                              style={s.cancelReply}
+                              onPress={() => { setReplyingId(null); setReplyText(''); }}>
+                              <Text style={s.cancelReplyTxt}>Cancel</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[s.sendReply, (!replyText.trim() || savingId === review.id) && { opacity: 0.5 }]}
+                              onPress={() => handleReply(review.id)}
+                              disabled={!replyText.trim() || savingId === review.id}>
+                              {savingId === review.id
+                                ? <ActivityIndicator size="small" color="#fff" />
+                                : <Text style={s.sendReplyTxt}>Send Reply</Text>
+                              }
+                            </Pressable>
+                          </View>
                         </View>
                       ) : (
-                        <Pressable
-                          style={s.replyBtn}
-                          onPress={() => showToast('Reply feature coming with reviews service.', 'info')}>
-                          <Text style={s.replyBtnTxt}>↩ Reply</Text>
-                        </Pressable>
+                        <View style={s.reviewFooter}>
+                          <Pressable
+                            style={s.replyBtn}
+                            onPress={() => { setReplyingId(review.id); setReplyText(''); }}>
+                            <Text style={s.replyBtnTxt}>↩ Reply</Text>
+                          </Pressable>
+                        </View>
                       )}
                     </View>
-                  </View>
-                ))
-              )}
-            </View>
-
-            <View style={{ paddingHorizontal: 16, paddingBottom: 32 }}>
-              <View style={s.syncNote}>
-                <Text style={{ fontSize: 14 }}>ℹ️</Text>
-                <Text style={s.syncNoteTxt}>
-                  Reviews shown are sample data. Live buyer reviews will appear here once the reviews service is integrated.
-                </Text>
+                  ))
+                )}
               </View>
-            </View>
 
-          </ScrollView>
+              <View style={{ height: 32 }} />
+            </ScrollView>
+          )}
         </View>
       </View>
     </Modal>
@@ -282,16 +342,41 @@ function makeStyles(c: AppColors) {
     reviewAvatarTxt: { fontSize: 11, fontWeight: '700', color: '#fff' },
     reviewBuyer: { fontSize: 13, fontWeight: '700', color: c.text },
     reviewDate: { fontSize: 11, color: c.textFaint },
-    reviewProduct: { fontSize: 10, color: c.textMuted, marginTop: 2 },
     reviewText: { fontSize: 13, color: c.textSub, lineHeight: 19 },
     reviewFooter: { flexDirection: 'row' },
-    repliedTag: {
+
+    replyBubble: {
       backgroundColor: c.primaryBg,
-      borderRadius: 6,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
+      borderRadius: 10,
+      padding: 10,
+      borderLeftWidth: 3,
+      borderLeftColor: '#2d7a47',
     },
-    repliedTxt: { fontSize: 11, color: '#2d7a47', fontWeight: '600' },
+    replyLabel: { fontSize: 10, fontWeight: '700', color: '#2d7a47', marginBottom: 4 },
+    replyTxt: { fontSize: 12, color: c.textSub, lineHeight: 17 },
+
+    replyForm: {
+      backgroundColor: c.bgScreen,
+      borderRadius: 10,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    replyInput: {
+      fontSize: 13, color: c.text, minHeight: 60,
+      textAlignVertical: 'top', lineHeight: 19,
+    },
+    cancelReply: {
+      flex: 1, paddingVertical: 8, borderRadius: 8,
+      borderWidth: 1, borderColor: c.borderMid, alignItems: 'center',
+    },
+    cancelReplyTxt: { fontSize: 12, fontWeight: '600', color: c.textSub },
+    sendReply: {
+      flex: 2, paddingVertical: 8, borderRadius: 8,
+      backgroundColor: '#2d7a47', alignItems: 'center',
+    },
+    sendReplyTxt: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
     replyBtn: {
       borderRadius: 6,
       paddingHorizontal: 12,
@@ -300,15 +385,5 @@ function makeStyles(c: AppColors) {
       borderColor: c.borderMid,
     },
     replyBtnTxt: { fontSize: 11, fontWeight: '600', color: c.textSub },
-
-    syncNote: {
-      flexDirection: 'row',
-      gap: 8,
-      backgroundColor: c.bgScreen,
-      borderRadius: 10,
-      padding: 12,
-      alignItems: 'flex-start',
-    },
-    syncNoteTxt: { flex: 1, fontSize: 11, color: c.textMuted, lineHeight: 16 },
   });
 }

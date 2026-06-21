@@ -196,12 +196,10 @@ function derivePayouts(orders: Order[]): PayoutEntry[] {
   const byDate = new Map<string, { gross: number; count: number; dateObj: Date }>();
 
   for (const order of orders) {
-    if (order.status !== 'delivered' && order.status !== 'completed') continue;
+    if (order.status !== 'delivered') continue;
     const d   = new Date(order.updatedAt ?? order.createdAt);
     const key = d.toDateString();
-    const gross = order.items.reduce(
-      (s: number, i: { price: number; quantity: number }) => s + i.price * i.quantity, 0,
-    );
+    const gross = order.items.reduce((s, i) => s + i.totalPrice, 0);
     const entry = byDate.get(key);
     if (entry) { entry.gross += gross; entry.count += 1; }
     else byDate.set(key, { gross, count: 1, dateObj: new Date(d.getFullYear(), d.getMonth(), d.getDate()) });

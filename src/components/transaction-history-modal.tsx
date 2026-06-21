@@ -55,11 +55,12 @@ export function TransactionHistoryModal({ visible, sellerId, storeName, onClose 
       .then(orders => {
         const txs: Transaction[] = [];
         orders.forEach(order => {
-          const orderTotal = order.items.reduce((s: number, i: { price: number; quantity: number }) => s + i.price * i.quantity, 0);
-          const commission = Math.round(orderTotal * 0.07);
-          const payout     = orderTotal - commission;
+          const sellerItems = order.items.filter(i => i.sellerId === sellerId);
+          const orderTotal  = sellerItems.reduce((s, i) => s + i.totalPrice, 0);
+          const commission  = Math.round(orderTotal * 0.07);
+          const payout      = orderTotal - commission;
 
-          if (order.status === 'delivered' || order.status === 'completed') {
+          if (order.status === 'delivered') {
             txs.push({
               id:          `pay-${order.id}`,
               date:        order.updatedAt ?? order.createdAt,

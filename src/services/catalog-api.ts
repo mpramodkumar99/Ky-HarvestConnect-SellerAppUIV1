@@ -1,5 +1,8 @@
-// Android emulator routes to the host machine via 10.0.2.2, not localhost
-const BASE_URL = 'http://10.0.2.2:3003';
+import { Platform } from 'react-native';
+
+const BASE_URL = Platform.OS === 'android'
+  ? 'http://10.0.2.2:3003'
+  : 'http://localhost:3003';
 
 // ── Types (mirror HC_CatalogSvc/src/types.ts) ────────────────────────────────
 
@@ -233,5 +236,82 @@ export async function deleteProduct(id: string, sellerId: string): Promise<void>
   return request<void>(`/v1/products/${id}`, {
     method: 'DELETE',
     headers: { 'X-Seller-Id': sellerId },
+  });
+}
+
+// ── Promotions ────────────────────────────────────────────────────────────────
+
+export type PromoType = 'percent' | 'flat' | 'free_delivery';
+
+export interface Promotion {
+  id: string;
+  sellerId: string;
+  type: PromoType;
+  value: number;     // percent (1-100) or paise for flat; 0 for free_delivery
+  minOrder: number;  // paise; 0 = no minimum
+  validDays: number;
+  active: boolean;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePromotionInput {
+  sellerId: string;
+  type: PromoType;
+  value: number;
+  minOrder: number;
+  validDays: number;
+  active?: boolean;
+}
+
+export async function listPromotions(sellerId: string): Promise<Promotion[]> {
+  const result = await request<Promotion[]>(`/v1/promotions?sellerId=${encodeURIComponent(sellerId)}`);
+  return result ?? [];
+}
+
+export async function createPromotion(input: CreatePromotionInput): Promise<Promotion> {
+  return request<Promotion>('/v1/promotions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function togglePromotion(id: string, active: boolean): Promise<Promotion> {
+  return request<Promotion>(`/v1/promotions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ active }),
+  });
+}
+
+export async function deletePromotion(id: string): Promise<void> {
+  return request<void>(`/v1/promotions/${id}`, { method: 'DELETE' });
+}
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+
+export interface Review {
+  id: string;
+  productId: string;
+  sellerId: string;
+  buyerId: string;
+  buyerName: string;
+  rating: number;
+  text: string;
+  reply?: string;
+  repliedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listReviews(sellerId: string): Promise<Review[]> {
+  const result = await request<Review[]>(`/v1/reviews?sellerId=${encodeURIComponent(sellerId)}`);
+  return result ?? [];
+}
+
+export async function replyToReview(id: string, reply: string): Promise<Review> {
+  return request<Review>(`/v1/reviews/${id}/reply`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reply }),
   });
 }

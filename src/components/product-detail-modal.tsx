@@ -43,7 +43,7 @@ export function ProductDetailModal({ visible, product, onClose, onEdit, onToggle
     return `${t('product_detail_in_stock')} · ${qty} ${t('product_detail_units')}`;
   }
 
-  const hasImages = product.images.length > 0;
+  const hasImages = (product.images?.length ?? 0) > 0;
   const categoryEmoji =
     product.isHandmade          ? '🪡' :
     product.category === 'farm_products'   ? '🌾' :
@@ -88,7 +88,7 @@ export function ProductDetailModal({ visible, product, onClose, onEdit, onToggle
                       const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
                       setImgIdx(idx);
                     }}>
-                    {product.images.map((uri, i) => (
+                    {(product.images ?? []).map((uri, i) => (
                       <Image
                         key={i}
                         source={{ uri }}
@@ -97,9 +97,9 @@ export function ProductDetailModal({ visible, product, onClose, onEdit, onToggle
                       />
                     ))}
                   </ScrollView>
-                  {product.images.length > 1 && (
+                  {(product.images?.length ?? 0) > 1 && (
                     <View style={s.dots}>
-                      {product.images.map((_, i) => (
+                      {(product.images ?? []).map((_, i) => (
                         <View key={i} style={[s.dot, i === imgIdx && s.dotActive]} />
                       ))}
                     </View>

@@ -196,6 +196,7 @@ export default function DashboardScreen() {
       />
       <PayoutModal
         visible={payoutOpen}
+        sellerId={activeStore.id}
         availableAmount={availableForPayout}
         grossAmount={grossAmount}
         deliveredCount={deliveredOrders.length}
