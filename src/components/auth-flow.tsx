@@ -630,6 +630,12 @@ function OtpScreen({ phone, onBack }: { phone: string; onBack: () => void }) {
     setError('');
     try {
       const session = await verifyOtp(phone, finalCode);
+      if (session.userType !== 'seller') {
+        setError('This number is not registered as a seller. Please use the correct app.');
+        setCode('');
+        inputRef.current?.focus();
+        return;
+      }
       await login(session);
       showToast('Welcome to HarvestConnect!', 'success');
     } catch (err) {
