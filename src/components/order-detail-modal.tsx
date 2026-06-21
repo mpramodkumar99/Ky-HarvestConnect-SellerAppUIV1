@@ -41,8 +41,9 @@ export function OrderDetailModal({
   ] as const;
 
   if (!order) return null;
+  const o = order;
 
-  const level = STATUS_LEVEL[order.status] ?? -1;
+  const level = STATUS_LEVEL[o.status] ?? -1;
   const isCancelled = level === -1;
 
   const addr = order.deliveryAddress;
@@ -59,12 +60,12 @@ export function OrderDetailModal({
     t('order_detail_cancelled');
 
   function handleFooterAction() {
-    if (order.status === 'confirmed' || order.status === 'pending_payment') {
-      onAccept(order); onClose();
-    } else if (order.status === 'processing') {
-      onMarkDispatched(order); onClose();
-    } else if (order.status === 'dispatched' || order.status === 'in_transit') {
-      onMarkDelivered(order); onClose();
+    if (o.status === 'confirmed' || o.status === 'pending_payment') {
+      onAccept(o); onClose();
+    } else if (o.status === 'processing') {
+      onMarkDispatched(o); onClose();
+    } else if (o.status === 'dispatched' || o.status === 'in_transit') {
+      onMarkDelivered(o); onClose();
     }
   }
 

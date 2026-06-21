@@ -32,11 +32,10 @@ function timeAgo(iso: string): string {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function getGreeting(storeName: string, t: (key: string) => string): string {
+function getGreeting(storeName: string, morning: string, afternoon: string, evening: string): string {
   const h = new Date().getHours();
-  const g = h < 12 ? t('dash_good_morning') : h < 17 ? t('dash_good_afternoon') : t('dash_good_evening');
-  const firstName = storeName.split(' ')[0];
-  return `${g}, ${firstName} 👋`;
+  const g = h < 12 ? morning : h < 17 ? afternoon : evening;
+  return `${g}, ${storeName.split(' ')[0]} 👋`;
 }
 
 export default function DashboardScreen() {
@@ -224,7 +223,7 @@ export default function DashboardScreen() {
                   <Text style={s.brandName}>{activeStore.name}</Text>
                   <Text style={s.brandChevron}>⌄</Text>
                 </View>
-                <Text style={s.brandSub}>{getGreeting(activeStore.name, t)}</Text>
+                <Text style={s.brandSub}>{getGreeting(activeStore.name, t('dash_good_morning'), t('dash_good_afternoon'), t('dash_good_evening'))}</Text>
               </View>
             </Pressable>
             <View style={{ flexDirection: 'row', gap: 8 }}>

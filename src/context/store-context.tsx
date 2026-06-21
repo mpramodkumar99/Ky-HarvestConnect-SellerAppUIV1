@@ -167,12 +167,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setStoresInitialized(false);
       return;
     }
+    const uid = userId;
     async function fetchUserStores() {
       setLoadingStores(true);
       try {
         const [sellers, user] = await Promise.all([
-          getSellersByUser(userId),
-          getUser(userId),
+          getSellersByUser(uid),
+          getUser(uid),
         ]);
         const stores = sellers.map(s => sellerToStore(s, s.memberRole));
         setStoreList(stores);
