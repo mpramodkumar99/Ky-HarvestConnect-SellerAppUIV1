@@ -87,9 +87,21 @@ export function StoreSwitcher({ visible, onClose }: Props) {
                     )}
                   </View>
                   <View style={s.statusRow}>
-                    <View style={[s.statusPill, store.status === 'live' ? s.statusPillLive : s.statusPillOff]}>
-                      <Text style={[s.statusTxt, store.status === 'live' ? s.statusTxtLive : s.statusTxtOff]}>
-                        {store.status === 'live' ? t('profile_store_live') : t('profile_store_offline')}
+                    <View style={[
+                      s.statusPill,
+                      store.status === 'live'     ? s.statusPillLive :
+                      store.status === 'vacation' ? s.statusPillVacation :
+                      s.statusPillOff,
+                    ]}>
+                      <Text style={[
+                        s.statusTxt,
+                        store.status === 'live'     ? s.statusTxtLive :
+                        store.status === 'vacation' ? s.statusTxtVacation :
+                        s.statusTxtOff,
+                      ]}>
+                        {store.status === 'live' ? t('profile_store_live') :
+                         store.status === 'vacation' ? '🏖️ Vacation' :
+                         t('profile_store_offline')}
                       </Text>
                     </View>
                     <Text style={s.storeCat}>{store.category}</Text>
@@ -198,11 +210,13 @@ function makeStyles(c: AppColors) {
     activePillTxt: { fontSize: 10, fontWeight: '700', color: '#fff' },
     statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     statusPill: { borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 },
-    statusPillLive: { backgroundColor: '#dcfce7' },
-    statusPillOff:  { backgroundColor: c.bgSubtle },
-    statusTxt:     { fontSize: 10, fontWeight: '700' },
-    statusTxtLive: { color: '#166534' },
-    statusTxtOff:  { color: c.textMuted },
+    statusPillLive:     { backgroundColor: '#dcfce7' },
+    statusPillOff:      { backgroundColor: c.bgSubtle },
+    statusPillVacation: { backgroundColor: '#fef3c7' },
+    statusTxt:          { fontSize: 10, fontWeight: '700' },
+    statusTxtLive:      { color: '#166534' },
+    statusTxtOff:       { color: c.textMuted },
+    statusTxtVacation:  { color: '#92400e' },
     storeCat: { fontSize: 11, color: c.textMuted },
     storeLoc: { fontSize: 11, color: c.textFaint },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },

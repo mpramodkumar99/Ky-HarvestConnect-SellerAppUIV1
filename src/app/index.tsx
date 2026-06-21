@@ -86,10 +86,10 @@ export default function DashboardScreen() {
   }
 
   async function handleAccept(order: Order) {
-    if (activeStore.vacationMode) {
+    if (activeStore.status !== 'live') {
       Alert.alert(
-        'Vacation Mode is ON',
-        'Turn off Vacation Mode first to accept new orders. Go to Profile → Vacation Mode.',
+        activeStore.status === 'vacation' ? 'Store on Vacation' : 'Store is Offline',
+        'Change your store status to Live first to accept new orders. Go to Profile → Edit Store.',
       );
       return;
     }
@@ -250,13 +250,19 @@ export default function DashboardScreen() {
         </SafeAreaView>
       </View>
 
-      {/* Vacation Mode Banner */}
-      {activeStore.vacationMode && (
+      {/* Store Status Banner — shown when not live */}
+      {activeStore.status !== 'live' && (
         <Pressable style={s.vacationBanner} onPress={() => router.push('/profile')}>
-          <Text style={{ fontSize: 20 }}>🏖️</Text>
+          <Text style={{ fontSize: 20 }}>{activeStore.status === 'vacation' ? '🏖️' : '⚫'}</Text>
           <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={s.vacationBannerTitle}>Vacation Mode is ON</Text>
-            <Text style={s.vacationBannerSub}>New orders are paused. Tap to manage.</Text>
+            <Text style={s.vacationBannerTitle}>
+              {activeStore.status === 'vacation' ? 'Store on Vacation' : 'Store is Offline'}
+            </Text>
+            <Text style={s.vacationBannerSub}>
+              {activeStore.status === 'vacation'
+                ? `New orders paused${activeStore.vacationUntil ? ` · Back ${activeStore.vacationUntil}` : ''}. Tap to manage.`
+                : 'New orders paused. Tap to go live.'}
+            </Text>
           </View>
           <Text style={{ fontSize: 18, color: '#92400e' }}>›</Text>
         </Pressable>

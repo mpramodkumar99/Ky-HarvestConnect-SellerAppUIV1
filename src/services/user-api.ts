@@ -90,7 +90,7 @@ export interface Seller {
   verified: boolean;
   verifiedAt?: string;
   documentUrls: string[];
-  vacationMode?: boolean;
+  status?: 'live' | 'offline' | 'vacation';
   vacationUntil?: string;
   createdAt: string;
   updatedAt: string;

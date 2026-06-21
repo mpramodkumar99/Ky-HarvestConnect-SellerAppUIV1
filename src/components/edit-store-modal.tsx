@@ -20,7 +20,7 @@ interface Props {
 }
 
 export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
-  const { updateStoreStatus } = useStore();
+  const { updateStoreStatus, refreshSeller } = useStore();
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
@@ -30,7 +30,8 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
   const [address,      setAddress]      = useState('');
   const [type,         setType]         = useState<SellerType>('farmer');
   const [businessType, setBusinessType] = useState<BusinessType>('retail');
-  const [status,       setStatus]       = useState<'live' | 'offline'>('live');
+  const [status,        setStatus]        = useState<'live' | 'offline' | 'vacation'>('live');
+  const [vacationUntil, setVacationUntil] = useState('');
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
 
@@ -43,6 +44,7 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
       setType(store.type);
       setBusinessType(store.businessType ?? 'retail');
       setStatus(store.status);
+      setVacationUntil(store.vacationUntil ?? '');
       setError('');
     }
   }, [visible, store]);
@@ -55,12 +57,14 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
     setError('');
     try {
       await updateSeller(store.id, {
-        name:        name.trim(),
-        description: description.trim() || undefined,
-        location:    location.trim() || undefined,
-        address:     address.trim() || undefined,
+        name:         name.trim(),
+        description:  description.trim() || undefined,
+        location:     location.trim() || undefined,
+        address:      address.trim() || undefined,
         type,
         ...(type === 'kirana' ? { businessType } : {}),
+        status,
+        vacationUntil: status === 'vacation' && vacationUntil.trim() ? vacationUntil.trim() : undefined,
       });
       updateStoreStatus(store.id, status);
       onUpdated();
@@ -216,8 +220,33 @@ export function EditStoreModal({ visible, store, onClose, onUpdated }: Props) {
                   </View>
                   {status === 'offline' && <Text style={[s.statusCheck, { color: c.textMuted }]}>✓</Text>}
                 </Pressable>
+                <Pressable
+                  style={[s.statusBtn, status === 'vacation' && s.statusBtnVacation]}
+                  onPress={() => setStatus('vacation')}
+                  disabled={loading}>
+                  <Text style={{ fontSize: 22 }}>🏖️</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.statusLabel, status === 'vacation' && s.statusLabelVacation]}>Vacation</Text>
+                    <Text style={s.statusDesc}>Away for a few days — buyers see a notice</Text>
+                  </View>
+                  {status === 'vacation' && <Text style={[s.statusCheck, { color: '#d97706' }]}>✓</Text>}
+                </Pressable>
               </View>
             </View>
+
+            {status === 'vacation' && (
+              <View style={s.field}>
+                <Text style={s.label}>Return date (optional)</Text>
+                <TextInput
+                  style={s.input}
+                  value={vacationUntil}
+                  onChangeText={setVacationUntil}
+                  placeholder="e.g. 2026-07-05"
+                  placeholderTextColor={c.textFaint}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+            )}
 
             {error ? (
               <View style={s.errorBox}>
@@ -339,11 +368,13 @@ function makeStyles(c: AppColors) {
       borderColor: c.border,
       backgroundColor: c.bgScreen,
     },
-    statusBtnLive:    { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
-    statusBtnOffline: { borderColor: c.textMuted, backgroundColor: c.bgScreen },
-    statusLabel:        { fontSize: 13, fontWeight: '700', color: c.textSub },
-    statusLabelLive:    { color: c.primaryText },
-    statusLabelOffline: { color: c.textSub },
+    statusBtnLive:       { borderColor: '#2d7a47', backgroundColor: c.primaryBg },
+    statusBtnOffline:    { borderColor: c.textMuted, backgroundColor: c.bgScreen },
+    statusBtnVacation:   { borderColor: '#f59e0b', backgroundColor: '#fef3c7' },
+    statusLabel:         { fontSize: 13, fontWeight: '700', color: c.textSub },
+    statusLabelLive:     { color: c.primaryText },
+    statusLabelOffline:  { color: c.textSub },
+    statusLabelVacation: { color: '#92400e' },
     statusDesc:  { fontSize: 10, color: c.textFaint, marginTop: 2 },
     statusCheck: { fontSize: 14, fontWeight: '700', color: '#2d7a47' },
 
