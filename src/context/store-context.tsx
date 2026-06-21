@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { SellerType, BusinessType, ShipsTo, SellerRole, MemberStatus, Seller, SocialHandles, CustomDeliveryZone, PendingInvite } from '@/services/user-api';
-import { getSeller, listMembers, getSellersByUser, getUser, getPendingInvites, activateMember, removeMember } from '@/services/user-api';
+import { getSeller, listMembers, getSellersByUser, getUser, getPendingInvites, activateMember, removeMember, updateSeller } from '@/services/user-api';
 import { listOrders } from '@/services/order-api';
 import { listProducts } from '@/services/catalog-api';
 import { useAuth } from '@/context/auth-context';
@@ -31,6 +31,7 @@ export interface Store {
   address?: string;
   socialHandles?: SocialHandles;
   status: 'live' | 'offline';  // store operational status — client-side only
+  vacationMode: boolean;  // when true, new order intake is paused
   role: SellerRole;       // this user's role within the seller account
   memberCount: number;
   productCount: number;
@@ -68,6 +69,7 @@ interface StoreContextValue {
   setActiveStore: (store: Store) => void;
   addStore: (store: Store) => void;  // called after createSeller succeeds
   updateStoreStatus: (id: string, status: 'live' | 'offline') => void;
+  toggleVacation: (enabled: boolean) => Promise<void>;
   refreshTeam: () => Promise<void>;
   refreshSeller: (id: string) => Promise<void>;
   refreshStats: (id: string) => Promise<void>;  // re-fetch ordersToday / revenueToday / productCount
@@ -132,6 +134,7 @@ function mergeLiveSeller(seed: Store, live: Awaited<ReturnType<typeof getSeller>
     fssaiNumber:        live.fssaiNumber,
     gstNumber:          live.gstNumber,
     businessType:       live.businessType,
+    vacationMode:       live.vacationMode ?? false,
   };
 }
 
@@ -279,6 +282,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setStoreList(prev => prev.map(s => s.id === id ? { ...s, status } : s));
   }, []);
 
+  const toggleVacation = useCallback(async (enabled: boolean) => {
+    const id = activeStoreId;
+    await updateSeller(id, { vacationMode: enabled });
+    setStoreList(prev => prev.map(s => s.id === id ? { ...s, vacationMode: enabled } : s));
+  }, [activeStoreId]);
+
   return (
     <StoreContext.Provider value={{
       stores: storeList,
@@ -295,6 +304,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setActiveStore: handleSetActiveStore,
       addStore,
       updateStoreStatus,
+      toggleVacation,
       refreshTeam,
       refreshSeller,
       refreshStats,
@@ -361,6 +371,7 @@ export function sellerToStore(seller: Seller, role: SellerRole = 'owner'): Store
     address:       seller.address,
     socialHandles: seller.socialHandles,
     status:        'live',
+    vacationMode:  seller.vacationMode ?? false,
     role,
     memberCount:   1,
     productCount:  0,

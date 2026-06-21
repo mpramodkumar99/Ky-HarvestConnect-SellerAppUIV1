@@ -90,6 +90,8 @@ export interface Seller {
   verified: boolean;
   verifiedAt?: string;
   documentUrls: string[];
+  vacationMode?: boolean;
+  vacationUntil?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -86,6 +86,13 @@ export default function DashboardScreen() {
   }
 
   async function handleAccept(order: Order) {
+    if (activeStore.vacationMode) {
+      Alert.alert(
+        'Vacation Mode is ON',
+        'Turn off Vacation Mode first to accept new orders. Go to Profile → Vacation Mode.',
+      );
+      return;
+    }
     setActionLoading(order.id);
     try {
       const updated = await updateOrderStatus(order.id, 'processing');
@@ -242,6 +249,18 @@ export default function DashboardScreen() {
           </Pressable>
         </SafeAreaView>
       </View>
+
+      {/* Vacation Mode Banner */}
+      {activeStore.vacationMode && (
+        <Pressable style={s.vacationBanner} onPress={() => router.push('/profile')}>
+          <Text style={{ fontSize: 20 }}>🏖️</Text>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={s.vacationBannerTitle}>Vacation Mode is ON</Text>
+            <Text style={s.vacationBannerSub}>New orders are paused. Tap to manage.</Text>
+          </View>
+          <Text style={{ fontSize: 18, color: '#92400e' }}>›</Text>
+        </Pressable>
+      )}
 
       {/* Today's Stats */}
       <View style={s.section}>
@@ -460,6 +479,20 @@ function makeStyles(c: AppColors) {
     payoutTitle: { color: '#fff', fontWeight: '700', fontSize: 14 },
     payoutSub: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 1 },
     payoutArrow: { color: 'rgba(255,255,255,0.6)', fontSize: 20 },
+
+    vacationBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#fef3c7',
+      marginHorizontal: 16,
+      marginTop: 12,
+      borderRadius: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: '#f59e0b',
+    },
+    vacationBannerTitle: { fontSize: 13, fontWeight: '700', color: '#92400e' },
+    vacationBannerSub:   { fontSize: 11, color: '#b45309', marginTop: 2 },
 
     section: { paddingHorizontal: 16, paddingTop: 16 },
     sectionHead: {
