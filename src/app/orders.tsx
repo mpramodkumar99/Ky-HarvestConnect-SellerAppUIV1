@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
-  Alert, Linking, RefreshControl, ScrollView,
+  Linking, RefreshControl, ScrollView,
   StyleSheet, Text, View, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,23 +13,24 @@ import { OrderFilterModal, type OrderFilters } from '@/components/order-filter-m
 import { useStore } from '@/context/store-context';
 import { useOrderAlert } from '@/context/order-alert-context';
 import { useLanguage } from '@/context/language-context';
+import { useToast } from '@/components/toast-provider';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import {
-  listOrders, updateOrderStatus, cancelOrder,
-  toSellerTab, payMethodLabel, formatOrderDate,
+  updateOrderStatus, cancelOrder,
+  toSellerTab, payMethodLabel, formatOrderDate, returnWindowDaysLeft,
   type Order, type SellerTab,
 } from '@/services/order-api';
 
 export default function OrdersScreen() {
-  const { activeStore, setNewOrderCount } = useStore();
-  const { testAlert, stopAlert } = useOrderAlert();
+  const { activeStore } = useStore();
+  const { testAlert, stopAlert, orders, ordersLoading, refreshOrders } = useOrderAlert();
   const { t } = useLanguage();
+  const { showToast } = useToast();
   const c = useAppColors();
   const s = makeStyles(c);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SellerTab>('new');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [localOrders, setLocalOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
@@ -37,11 +38,20 @@ export default function OrdersScreen() {
   const [filterVisible, setFilterVisible] = useState(false);
   const [filters, setFilters] = useState<OrderFilters>({ paymentMethod: null });
 
+  // Merge: use localOrders overrides for optimistic UI updates after actions,
+  // then fall back to the live-polled orders from the alert context.
+  const mergedOrders = orders.map(o => {
+    const local = localOrders.find(l => l.id === o.id);
+    return local ?? o;
+  });
+
   const TABS: { label: string; value: SellerTab }[] = [
     { label: t('orders_new'),        value: 'new' },
     { label: t('orders_accepted'),   value: 'accepted' },
+    { label: t('orders_packing'),    value: 'packing' },
     { label: t('orders_dispatched'), value: 'dispatched' },
     { label: t('orders_delivered'),  value: 'delivered' },
+    { label: t('orders_returns'),    value: 'returns' },
     { label: t('orders_cancelled'),  value: 'cancelled' },
   ];
 
@@ -49,51 +59,71 @@ export default function OrdersScreen() {
     if (order.status === 'confirmed' || order.status === 'pending_payment')
       return { label: t('orders_accept_order'), color: '#fff', bg: '#2d7a47' };
     if (order.status === 'processing')
+      return { label: t('orders_start_packing'), color: '#92400e', bg: '#fffbeb' };
+    if (order.status === 'packing')
       return { label: t('orders_mark_dispatched'), color: '#166534', bg: '#f0fdf4' };
     if (order.status === 'dispatched' || order.status === 'in_transit')
       return { label: t('orders_mark_delivered'), color: '#1e40af', bg: '#eff6ff' };
+    if (order.status === 'return_requested')
+      return { label: t('orders_accept_return'), color: '#fff', bg: '#dc2626' };
     return null;
   }
 
-  const fetchOrders = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true); else setLoading(true);
-    try {
-      const data = await listOrders({ sellerId: activeStore.id });
-      setOrders(data);
-    } catch {
-      if (!isRefresh) setOrders([]);
-    } finally {
-      if (isRefresh) setRefreshing(false); else setLoading(false);
-    }
-  }, [activeStore.id]);
-
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-
-  function tabCount(tab: SellerTab) {
-    return orders.filter((o) => toSellerTab(o.status) === tab).length;
+  async function handleRefresh() {
+    setRefreshing(true);
+    setLocalOrders([]);
+    refreshOrders();
+    // ordersLoading handles the spinner; we just need to turn off our local refreshing flag
+    setTimeout(() => setRefreshing(false), 1000);
   }
 
-  useEffect(() => {
-    setNewOrderCount(tabCount('new'));
-  }, [orders, setNewOrderCount]);
+  function tabCount(tab: SellerTab) {
+    return mergedOrders.filter((o) => toSellerTab(o.status) === tab).length;
+  }
 
-  const filtered = orders
+  const filtered = mergedOrders
     .filter((o) => toSellerTab(o.status) === activeTab)
     .filter((o) => !filters.paymentMethod || o.paymentMethod === filters.paymentMethod);
 
   function updateOrderInState(updated: Order) {
-    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    setLocalOrders((prev) => {
+      const exists = prev.some(o => o.id === updated.id);
+      return exists ? prev.map(o => o.id === updated.id ? updated : o) : [...prev, updated];
+    });
   }
 
   async function handleAccept(order: Order) {
     stopAlert();
     setActionLoading(order.id);
     try {
+      // pending_payment → confirmed → processing (two hops when payment isn't pre-confirmed)
+      if (order.status === 'pending_payment') {
+        await updateOrderStatus(order.id, 'confirmed');
+      }
       const updated = await updateOrderStatus(order.id, 'processing');
       updateOrderInState(updated);
       setActiveTab('accepted');
-    } catch {
-      Alert.alert('Error', 'Failed to accept order. Please try again.');
+      showToast('Order accepted! Start packing when ready.', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to accept order. Please try again.';
+      console.error('[Accept]', msg, err);
+      showToast(msg, 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleStartPacking(order: Order) {
+    setActionLoading(order.id);
+    try {
+      const updated = await updateOrderStatus(order.id, 'packing');
+      updateOrderInState(updated);
+      setActiveTab('packing');
+      showToast('Order marked as packing.', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update order. Please try again.';
+      console.error('[StartPacking]', msg, err);
+      showToast(msg, 'error');
     } finally {
       setActionLoading(null);
     }
@@ -105,8 +135,11 @@ export default function OrdersScreen() {
       const updated = await updateOrderStatus(order.id, 'dispatched');
       updateOrderInState(updated);
       setActiveTab('dispatched');
-    } catch {
-      Alert.alert('Error', 'Failed to update order. Please try again.');
+      showToast('Order marked as dispatched.', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update order. Please try again.';
+      console.error('[Dispatched]', msg, err);
+      showToast(msg, 'error');
     } finally {
       setActionLoading(null);
     }
@@ -115,11 +148,19 @@ export default function OrdersScreen() {
   async function handleMarkDelivered(order: Order) {
     setActionLoading(order.id);
     try {
+      // State machine requires dispatched → in_transit → delivered
+      if (order.status === 'dispatched') {
+        const inTransit = await updateOrderStatus(order.id, 'in_transit');
+        updateOrderInState(inTransit);
+      }
       const updated = await updateOrderStatus(order.id, 'delivered');
       updateOrderInState(updated);
       setActiveTab('delivered');
-    } catch {
-      Alert.alert('Error', 'Failed to update order. Please try again.');
+      showToast('Order marked as delivered!', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update order. Please try again.';
+      console.error('[Delivered]', msg, err);
+      showToast(msg, 'error');
     } finally {
       setActionLoading(null);
     }
@@ -135,8 +176,10 @@ export default function OrdersScreen() {
       updateOrderInState(updated);
       setDeclineOrder(null);
       setActiveTab('cancelled');
-    } catch {
-      Alert.alert('Error', 'Failed to decline order. Please try again.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to decline order. Please try again.';
+      console.error('[Decline]', msg, err);
+      showToast(msg, 'error');
     } finally {
       setActionLoading(null);
     }
@@ -144,8 +187,25 @@ export default function OrdersScreen() {
 
   function handlePrimaryAction(order: Order) {
     if (order.status === 'confirmed' || order.status === 'pending_payment') handleAccept(order);
-    else if (order.status === 'processing') handleMarkDispatched(order);
+    else if (order.status === 'processing')                                  handleStartPacking(order);
+    else if (order.status === 'packing')                                     handleMarkDispatched(order);
     else if (order.status === 'dispatched' || order.status === 'in_transit') handleMarkDelivered(order);
+    else if (order.status === 'return_requested')                            handleAcceptReturn(order);
+  }
+
+  async function handleAcceptReturn(order: Order) {
+    setActionLoading(order.id);
+    try {
+      const updated = await updateOrderStatus(order.id, 'return_accepted');
+      updateOrderInState(updated);
+      showToast('Return accepted.', 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to process return. Please try again.';
+      console.error('[AcceptReturn]', msg, err);
+      showToast(msg, 'error');
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   function handleCallBuyer(order: Order) {
@@ -164,6 +224,7 @@ export default function OrdersScreen() {
         onClose={() => setDetailOrder(null)}
         onAccept={handleAccept}
         onDecline={(o) => { setDetailOrder(null); setDeclineOrder(o); }}
+        onStartPacking={handleStartPacking}
         onMarkDispatched={handleMarkDispatched}
         onMarkDelivered={handleMarkDelivered}
         actionLoading={detailOrder ? actionLoading === detailOrder.id : false}
@@ -254,13 +315,13 @@ export default function OrdersScreen() {
         contentContainerStyle={s.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchOrders(true)}
+            refreshing={refreshing || ordersLoading}
+            onRefresh={handleRefresh}
             colors={['#2d7a47']}
             tintColor="#2d7a47"
           />
         }>
-        {loading ? (
+        {ordersLoading && mergedOrders.length === 0 ? (
           <View style={s.emptyState}>
             <Text style={{ fontSize: 32 }}>⏳</Text>
             <Text style={s.emptyTitle}>{t('orders_loading')}</Text>
@@ -351,13 +412,24 @@ export default function OrdersScreen() {
                   </View>
                 )}
 
-                {order.status === 'delivered' && (
-                  <View style={s.completedRow}>
-                    <Text style={s.completedTxt}>
-                      ✓ {t('orders_completed_txt')} · ₹{Math.round(order.total * 0.93 / 100)} {t('orders_after_commission')}
-                    </Text>
-                  </View>
-                )}
+                {order.status === 'delivered' && (() => {
+                  const daysLeft = returnWindowDaysLeft(order);
+                  return (
+                    <View style={s.completedRow}>
+                      <Text style={s.completedTxt}>
+                        ✓ {t('orders_completed_txt')} · ₹{Math.round(order.total * 0.93 / 100)} {t('orders_after_commission')}
+                      </Text>
+                      {daysLeft !== null && daysLeft > 0 && (
+                        <Text style={s.returnWindowTxt}>
+                          🔄 {t('orders_return_window')} {daysLeft} {t('orders_days_left')}
+                        </Text>
+                      )}
+                      {daysLeft === 0 && (
+                        <Text style={s.returnWindowClosedTxt}>🔒 {t('orders_return_closed')}</Text>
+                      )}
+                    </View>
+                  );
+                })()}
 
                 {(order.status === 'cancelled' || order.status === 'refund_initiated' || order.status === 'refunded') && order.cancelReason && (
                   <View style={s.cancelRow}>
@@ -545,8 +617,10 @@ function makeStyles(c: AppColors) {
     actionBtnLoading: { opacity: 0.7 },
     actionBtnTxt: { fontSize: 13, fontWeight: '700' },
 
-    completedRow: { padding: 12, paddingTop: 0 },
+    completedRow: { padding: 12, paddingTop: 0, gap: 4 },
     completedTxt: { fontSize: 11, color: c.textMuted, textAlign: 'center' },
+    returnWindowTxt: { fontSize: 11, color: '#d97706', textAlign: 'center', fontWeight: '600' },
+    returnWindowClosedTxt: { fontSize: 11, color: c.textFaint, textAlign: 'center' },
 
     cancelRow: {
       padding: 12,

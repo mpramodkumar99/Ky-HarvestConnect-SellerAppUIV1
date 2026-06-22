@@ -1,16 +1,19 @@
+import { useState } from 'react';
 import {
-  Modal, View, Text, Pressable, ScrollView, StyleSheet, Linking,
+  Modal, View, Text, Pressable, ScrollView, StyleSheet, Linking, ActivityIndicator,
 } from 'react-native';
-import type { Order, OrderStatus } from '@/services/order-api';
-import { payMethodLabel } from '@/services/order-api';
+import type { Order, OrderStatus, InvoiceData } from '@/services/order-api';
+import { payMethodLabel, returnWindowDaysLeft, getInvoice } from '@/services/order-api';
 import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 
 const STATUS_LEVEL: Partial<Record<OrderStatus, number>> = {
   pending_payment: 0, confirmed: 0,
   processing: 1,
-  dispatched: 2, in_transit: 2,
-  delivered: 3,
+  packing: 2,
+  dispatched: 3, in_transit: 3,
+  delivered: 4,
+  return_requested: 4, return_accepted: 4, return_rejected: 4,
 };
 
 interface Props {
@@ -19,6 +22,7 @@ interface Props {
   onClose: () => void;
   onAccept: (order: Order) => void;
   onDecline: (order: Order) => void;
+  onStartPacking: (order: Order) => void;
   onMarkDispatched: (order: Order) => void;
   onMarkDelivered: (order: Order) => void;
   actionLoading: boolean;
@@ -26,18 +30,34 @@ interface Props {
 
 export function OrderDetailModal({
   visible, order, onClose,
-  onAccept, onDecline, onMarkDispatched, onMarkDelivered,
+  onAccept, onDecline, onStartPacking, onMarkDispatched, onMarkDelivered,
   actionLoading,
 }: Props) {
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
+  const [invoice, setInvoice]         = useState<InvoiceData | null>(null);
+  const [invoiceLoading, setInvLoading] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
+
+  async function loadInvoice() {
+    if (!order) return;
+    setInvLoading(true);
+    try {
+      const data = await getInvoice(order.id);
+      setInvoice(data);
+      setShowInvoice(true);
+    } catch { /* ignore */ } finally {
+      setInvLoading(false);
+    }
+  }
 
   const TIMELINE_STEPS = [
     { id: 'placed',     label: t('order_detail_timeline_placed'),     level: 0 },
     { id: 'accepted',   label: t('order_detail_timeline_accepted'),   level: 1 },
-    { id: 'dispatched', label: t('order_detail_timeline_dispatched'), level: 2 },
-    { id: 'delivered',  label: t('order_detail_timeline_delivered'),  level: 3 },
+    { id: 'packing',    label: t('order_detail_timeline_packing'),    level: 2 },
+    { id: 'dispatched', label: t('order_detail_timeline_dispatched'), level: 3 },
+    { id: 'delivered',  label: t('order_detail_timeline_delivered'),  level: 4 },
   ] as const;
 
   if (!order) return null;
@@ -62,6 +82,8 @@ export function OrderDetailModal({
     if (order.status === 'confirmed' || order.status === 'pending_payment') {
       onAccept(order); onClose();
     } else if (order.status === 'processing') {
+      onStartPacking(order); onClose();
+    } else if (order.status === 'packing') {
       onMarkDispatched(order); onClose();
     } else if (order.status === 'dispatched' || order.status === 'in_transit') {
       onMarkDelivered(order); onClose();
@@ -70,11 +92,13 @@ export function OrderDetailModal({
 
   const footerAction =
     order.status === 'confirmed' || order.status === 'pending_payment'
-      ? { label: t('orders_accept_order'), color: '#fff', bg: '#2d7a47' }
+      ? { label: t('orders_accept_order'),    color: '#fff',        bg: '#2d7a47' }
     : order.status === 'processing'
+      ? { label: t('orders_start_packing'),   color: '#92400e',     bg: '#fffbeb',  border: '#fde68a' }
+    : order.status === 'packing'
       ? { label: t('orders_mark_dispatched'), color: c.primaryText, bg: c.primaryBg, border: c.primaryBorder }
     : order.status === 'dispatched' || order.status === 'in_transit'
-      ? { label: t('orders_mark_delivered'), color: '#1e40af', bg: '#eff6ff', border: '#dbeafe' }
+      ? { label: t('orders_mark_delivered'),  color: '#1e40af',     bg: '#eff6ff',  border: '#dbeafe' }
     : null;
 
   return (
@@ -85,7 +109,7 @@ export function OrderDetailModal({
       statusBarTranslucent
       onRequestClose={onClose}>
       <View style={s.container}>
-        <Pressable style={[StyleSheet.absoluteFill, s.backdrop]} onPress={onClose} />
+        <Pressable style={[StyleSheet.absoluteFill, s.backdrop]} onPress={() => { setShowInvoice(false); setInvoice(null); onClose(); }} />
         <View style={s.sheet}>
 
           {/* Header */}
@@ -224,6 +248,108 @@ export function OrderDetailModal({
                     <Text style={s.trackingEta}>{t('order_detail_est_delivery')} {order.estimatedDelivery}</Text>
                   )}
                 </View>
+              </View>
+            )}
+
+            {/* Return window */}
+            {order.status === 'delivered' && order.returnWindowClosedAt && (() => {
+              const daysLeft = returnWindowDaysLeft(order);
+              return (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>{t('order_detail_return_window')}</Text>
+                  <View style={[s.returnWindowBox, daysLeft === 0 && s.returnWindowBoxClosed]}>
+                    {daysLeft !== null && daysLeft > 0 ? (
+                      <>
+                        <Text style={s.returnWindowIcon}>🔄</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.returnWindowTitle}>{daysLeft} {t('orders_days_left')}</Text>
+                          <Text style={s.returnWindowSub}>
+                            {t('order_detail_return_closes')} {new Date(order.returnWindowClosedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          </Text>
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={s.returnWindowIcon}>🔒</Text>
+                        <Text style={s.returnWindowClosedTxt}>{t('orders_return_closed')}</Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* Return request */}
+            {(order.status === 'return_requested' || order.status === 'return_accepted' || order.status === 'return_rejected') && (
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>{t('order_detail_return_request')}</Text>
+                <View style={s.returnRequestBox}>
+                  <Text style={s.returnRequestStatus}>
+                    {order.status === 'return_requested' ? '⏳ Pending Review'
+                    : order.status === 'return_accepted' ? '✅ Return Accepted'
+                    : '❌ Return Rejected'}
+                  </Text>
+                  {order.returnReason && (
+                    <Text style={s.returnRequestReason}>"{order.returnReason}"</Text>
+                  )}
+                  {order.returnRequestedAt && (
+                    <Text style={s.returnRequestDate}>
+                      Requested {new Date(order.returnRequestedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Invoice */}
+            {order.status === 'delivered' && (
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>{t('order_detail_invoice')}</Text>
+                {showInvoice && invoice ? (
+                  <View style={s.invoiceBox}>
+                    <View style={s.invoiceHeader}>
+                      <Text style={s.invoiceTitle}>🧾 HarvestConnect</Text>
+                      <Text style={s.invoiceNum}>{invoice.invoiceNumber}</Text>
+                    </View>
+                    <View style={s.invoiceDivider} />
+                    {order.items.map((item, i) => (
+                      <View key={i} style={s.invoiceRow}>
+                        <Text style={s.invoiceItemName} numberOfLines={1}>{item.productName}</Text>
+                        <Text style={s.invoiceItemQty}>×{item.quantity}</Text>
+                        <Text style={s.invoiceItemAmt}>₹{Math.round(item.totalPrice / 100)}</Text>
+                      </View>
+                    ))}
+                    <View style={s.invoiceDivider} />
+                    <View style={s.invoiceRow}>
+                      <Text style={s.invoiceLabel}>{t('order_detail_subtotal')}</Text>
+                      <Text style={s.invoiceVal}>₹{Math.round(order.subtotal / 100)}</Text>
+                    </View>
+                    <View style={s.invoiceRow}>
+                      <Text style={s.invoiceLabel}>{t('order_detail_delivery_fee')}</Text>
+                      <Text style={s.invoiceVal}>₹{Math.round(order.deliveryFee / 100)}</Text>
+                    </View>
+                    {order.discount > 0 && (
+                      <View style={s.invoiceRow}>
+                        <Text style={s.invoiceLabel}>{t('order_detail_discount')}</Text>
+                        <Text style={[s.invoiceVal, { color: '#16a34a' }]}>–₹{Math.round(order.discount / 100)}</Text>
+                      </View>
+                    )}
+                    <View style={[s.invoiceRow, s.invoiceTotalRow]}>
+                      <Text style={s.invoiceTotalLabel}>{t('order_detail_total')}</Text>
+                      <Text style={s.invoiceTotalAmt}>₹{Math.round(order.total / 100)}</Text>
+                    </View>
+                    <Text style={s.invoiceFooter}>
+                      {t('order_detail_invoice_issued')} {new Date(invoice.issuedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </Text>
+                  </View>
+                ) : (
+                  <Pressable style={s.invoiceBtn} onPress={loadInvoice} disabled={invoiceLoading}>
+                    {invoiceLoading
+                      ? <ActivityIndicator size="small" color="#2d7a47" />
+                      : <Text style={s.invoiceBtnTxt}>📄 {t('order_detail_view_invoice')}</Text>
+                    }
+                  </Pressable>
+                )}
               </View>
             )}
 
@@ -438,6 +564,55 @@ function makeStyles(c: AppColors) {
     },
     trackingId: { fontSize: 13, fontWeight: '700', color: '#1e40af' },
     trackingEta: { fontSize: 12, color: '#3b82f6' },
+
+    // Return window
+    returnWindowBox: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      backgroundColor: '#fffbeb', borderRadius: 10, padding: 12,
+      borderWidth: 1, borderColor: '#fde68a',
+    },
+    returnWindowBoxClosed: { backgroundColor: c.bgScreen, borderColor: c.border },
+    returnWindowIcon: { fontSize: 20 },
+    returnWindowTitle: { fontSize: 13, fontWeight: '700', color: '#d97706' },
+    returnWindowSub: { fontSize: 11, color: '#92400e', marginTop: 2 },
+    returnWindowClosedTxt: { fontSize: 12, color: c.textFaint },
+
+    // Return request
+    returnRequestBox: {
+      backgroundColor: c.bgScreen, borderRadius: 10, padding: 12,
+      borderWidth: 1, borderColor: c.border, gap: 4,
+    },
+    returnRequestStatus: { fontSize: 13, fontWeight: '700', color: c.text },
+    returnRequestReason: { fontSize: 12, color: c.textSub, fontStyle: 'italic' },
+    returnRequestDate: { fontSize: 11, color: c.textFaint },
+
+    // Invoice
+    invoiceBtn: {
+      alignItems: 'center', justifyContent: 'center',
+      paddingVertical: 14, borderRadius: 10,
+      backgroundColor: c.bgScreen, borderWidth: 1.5,
+      borderColor: '#2d7a47', borderStyle: 'dashed',
+    },
+    invoiceBtnTxt: { fontSize: 13, fontWeight: '700', color: '#2d7a47' },
+    invoiceBox: {
+      backgroundColor: '#fff', borderRadius: 10,
+      borderWidth: 1, borderColor: c.border,
+      padding: 14, gap: 6,
+    },
+    invoiceHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    invoiceTitle: { fontSize: 14, fontWeight: '800', color: '#1a4a28' },
+    invoiceNum: { fontSize: 11, color: c.textFaint, fontWeight: '600' },
+    invoiceDivider: { height: 1, backgroundColor: c.border, marginVertical: 4 },
+    invoiceRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    invoiceItemName: { flex: 1, fontSize: 12, color: c.text },
+    invoiceItemQty: { fontSize: 11, color: c.textFaint, width: 24, textAlign: 'center' },
+    invoiceItemAmt: { fontSize: 12, fontWeight: '600', color: c.textSub, width: 56, textAlign: 'right' },
+    invoiceLabel: { flex: 1, fontSize: 12, color: c.textMuted },
+    invoiceVal: { fontSize: 12, fontWeight: '600', color: c.textSub },
+    invoiceTotalRow: { paddingTop: 6, marginTop: 2, borderTopWidth: 1, borderTopColor: c.border },
+    invoiceTotalLabel: { flex: 1, fontSize: 13, fontWeight: '700', color: c.text },
+    invoiceTotalAmt: { fontSize: 15, fontWeight: '800', color: '#2d7a47' },
+    invoiceFooter: { fontSize: 10, color: c.textFaint, textAlign: 'center', marginTop: 4 },
 
     // Footer
     footer: {

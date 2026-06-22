@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  Alert, RefreshControl, ScrollView,
+  RefreshControl, ScrollView,
   View, Text, Pressable, StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,10 +11,11 @@ import { StoreSwitcher } from '@/components/store-switcher';
 import { DeclineReasonModal } from '@/components/decline-reason-modal';
 import { PayoutModal } from '@/components/payout-modal';
 import { useStore } from '@/context/store-context';
+import { useOrderAlert } from '@/context/order-alert-context';
 import { useLanguage } from '@/context/language-context';
 import { useAppColors, type AppColors } from '@/hooks/use-app-colors';
 import {
-  listOrders, updateOrderStatus, cancelOrder,
+  updateOrderStatus, cancelOrder,
   toSellerTab,
   type Order,
 } from '@/services/order-api';
@@ -40,19 +41,21 @@ function getGreeting(storeName: string, t: (key: string) => string): string {
 }
 
 export default function DashboardScreen() {
-  const { activeStore, setNewOrderCount } = useStore();
+  const { activeStore } = useStore();
+  const { orders, ordersLoading, refreshOrders } = useOrderAlert();
   const { t } = useLanguage();
   const c = useAppColors();
   const s = makeStyles(c);
   const router = useRouter();
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [localOrders, setLocalOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [declineOrder, setDeclineOrder] = useState<Order | null>(null);
   const [payoutOpen, setPayoutOpen] = useState(false);
   const [bankAccount, setBankAccount] = useState<BankAccount | null>(null);
+
+  const mergedOrders = orders.map(o => localOrders.find(l => l.id === o.id) ?? o);
 
   const quickActions: { icon: string; label: string; color: string; bg: string; route: string | null; key: string }[] = [
     { icon: '➕', label: t('dash_add_product'),    color: '#2d7a47', bg: '#dcfce7', route: '/products', key: 'add_product' },
@@ -61,28 +64,24 @@ export default function DashboardScreen() {
     { icon: '📈', label: t('dash_analytics'),      color: '#7c3aed', bg: '#ede9fe', route: '/analytics', key: 'analytics' },
   ];
 
-  const fetchOrders = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true); else setLoading(true);
-    try {
-      const data = await listOrders({ sellerId: activeStore.id });
-      setOrders(data);
-    } catch {
-      if (!isRefresh) setOrders([]);
-    } finally {
-      if (isRefresh) setRefreshing(false); else setLoading(false);
-    }
-  }, [activeStore.id]);
-
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-
   useEffect(() => {
     getBankAccount(activeStore.id)
       .then(setBankAccount)
       .catch(() => setBankAccount(null));
   }, [activeStore.id]);
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    setLocalOrders([]);
+    refreshOrders();
+    setTimeout(() => setRefreshing(false), 1000);
+  }
+
   function updateOrderInState(updated: Order) {
-    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    setLocalOrders((prev) => {
+      const exists = prev.some(o => o.id === updated.id);
+      return exists ? prev.map(o => o.id === updated.id ? updated : o) : [...prev, updated];
+    });
   }
 
   async function handleAccept(order: Order) {
@@ -124,12 +123,10 @@ export default function DashboardScreen() {
     }
   }
 
-  const newCount      = orders.filter((o) => toSellerTab(o.status) === 'new').length;
-  const pendingCount  = orders.filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status))).length;
+  const newCount      = mergedOrders.filter((o) => toSellerTab(o.status) === 'new').length;
+  const pendingCount  = mergedOrders.filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status))).length;
 
-  useEffect(() => { setNewOrderCount(newCount); }, [newCount, setNewOrderCount]);
-
-  const deliveredOrders = orders.filter((o) => o.status === 'delivered');
+  const deliveredOrders = mergedOrders.filter((o) => o.status === 'delivered');
   const grossAmount        = Math.round(deliveredOrders.reduce((sum, o) => sum + o.total, 0) / 100);
   const availableForPayout = Math.round(grossAmount * 0.93);
 
@@ -140,20 +137,20 @@ export default function DashboardScreen() {
   const todayRevenue = Math.round(deliveredToday.reduce((sum, o) => sum + o.total, 0) / 100);
   const todayRevenueStr = todayRevenue > 0
     ? `₹${todayRevenue.toLocaleString('en-IN')}`
-    : orders.length === 0 ? '—' : '₹0';
+    : mergedOrders.length === 0 ? '—' : '₹0';
 
-  const incomingOrders = orders
+  const incomingOrders = mergedOrders
     .filter((o) => ['new', 'accepted'].includes(toSellerTab(o.status)))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
-  const totalOrders     = orders.length;
-  const cancelledCount  = orders.filter((o) => o.status === 'cancelled').length;
+  const totalOrders     = mergedOrders.length;
+  const cancelledCount  = mergedOrders.filter((o) => o.status === 'cancelled').length;
   const fulfilledCount  = deliveredOrders.length;
-  const nonCancelled    = orders.filter((o) => o.status !== 'cancelled').length;
+  const nonCancelled    = mergedOrders.filter((o) => o.status !== 'cancelled').length;
   const fulfilmentRate  = nonCancelled > 0
     ? `${Math.round((fulfilledCount / nonCancelled) * 100)}%`
-    : orders.length === 0 ? '—' : '100%';
+    : mergedOrders.length === 0 ? '—' : '100%';
   const returnRate = totalOrders > 0
     ? `${((cancelledCount / totalOrders) * 100).toFixed(1)}%`
     : '—';
@@ -178,8 +175,8 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => fetchOrders(true)}
+          refreshing={refreshing || ordersLoading}
+          onRefresh={handleRefresh}
           colors={['#2d7a47']}
           tintColor="#2d7a47"
         />
@@ -299,7 +296,7 @@ export default function DashboardScreen() {
           </Pressable>
         </View>
 
-        {loading ? (
+        {ordersLoading && mergedOrders.length === 0 ? (
           <View style={s.loadingBox}>
             <Text style={s.loadingTxt}>{t('dash_loading_orders')}</Text>
           </View>

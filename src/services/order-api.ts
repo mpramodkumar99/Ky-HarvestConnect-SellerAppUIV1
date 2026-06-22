@@ -10,9 +10,13 @@ export type OrderStatus =
   | 'pending_payment'
   | 'confirmed'
   | 'processing'
+  | 'packing'
   | 'dispatched'
   | 'in_transit'
   | 'delivered'
+  | 'return_requested'
+  | 'return_accepted'
+  | 'return_rejected'
   | 'cancelled'
   | 'refund_initiated'
   | 'refunded';
@@ -59,23 +63,37 @@ export interface Order {
   status:             OrderStatus;
   trackingId?:        string;
   estimatedDelivery?: string;
-  cancelledAt?:       string;
-  cancelReason?:      string;
-  deliveredAt?:       string;
-  createdAt:          string;
-  updatedAt:          string;
+  cancelledAt?:         string;
+  cancelReason?:        string;
+  packedAt?:            string;
+  deliveredAt?:         string;
+  returnWindowDays:     number;
+  returnWindowClosedAt?: string;
+  returnRequestedAt?:   string;
+  returnReason?:        string;
+  createdAt:            string;
+  updatedAt:            string;
 }
 
 // ── Seller UI helpers ─────────────────────────────────────────────────────────
 
-export type SellerTab = 'new' | 'accepted' | 'dispatched' | 'delivered' | 'cancelled';
+export type SellerTab = 'new' | 'accepted' | 'packing' | 'dispatched' | 'delivered' | 'returns' | 'cancelled';
 
 export function toSellerTab(status: OrderStatus): SellerTab {
-  if (status === 'confirmed' || status === 'pending_payment') return 'new';
-  if (status === 'processing') return 'accepted';
-  if (status === 'dispatched' || status === 'in_transit') return 'dispatched';
-  if (status === 'delivered') return 'delivered';
+  if (status === 'confirmed' || status === 'pending_payment')           return 'new';
+  if (status === 'processing')                                          return 'accepted';
+  if (status === 'packing')                                             return 'packing';
+  if (status === 'dispatched' || status === 'in_transit')               return 'dispatched';
+  if (status === 'delivered')                                           return 'delivered';
+  if (status === 'return_requested' || status === 'return_accepted' || status === 'return_rejected') return 'returns';
   return 'cancelled';
+}
+
+export function returnWindowDaysLeft(order: Order): number | null {
+  if (!order.returnWindowClosedAt) return null;
+  const msLeft = new Date(order.returnWindowClosedAt).getTime() - Date.now();
+  if (msLeft <= 0) return 0;
+  return Math.ceil(msLeft / 86_400_000);
 }
 
 export function payMethodLabel(method: PaymentMethod): string {
@@ -157,4 +175,22 @@ export async function cancelOrder(id: string, reason: string): Promise<Order> {
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
+}
+
+export async function requestReturn(id: string, reason: string): Promise<Order> {
+  return request<Order>(`/v1/orders/${id}/return`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export interface InvoiceData {
+  invoiceNumber: string;
+  order: Order;
+  issuedAt: string;
+  sellerGstin?: string;
+}
+
+export async function getInvoice(id: string): Promise<InvoiceData> {
+  return request<InvoiceData>(`/v1/orders/${id}/invoice`);
 }

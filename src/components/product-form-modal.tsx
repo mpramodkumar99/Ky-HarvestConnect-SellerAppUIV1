@@ -10,8 +10,9 @@ import {
   CATEGORIES, SUB_CATEGORIES_BY_CATEGORY, CATEGORIES_BY_SELLER_TYPE,
   SHIPS_TO_OPTIONS, LOW_STOCK_THRESHOLD,
   UNITS_BY_SUBCATEGORY, UNITS_BY_SELLER_TYPE, COMMON_UNITS,
-  createProduct, updateProduct,
+  createProduct, updateProduct, type CatalogSuggestion,
 } from '@/services/catalog-api';
+import { ProductNameSearch } from '@/components/product-name-search';
 import type { SellerType, ShipsTo } from '@/services/user-api';
 import { lookupPincode, type PincodeInfo } from '@/utils/pincode';
 import { DELIVERY_ZONE_CONFIG } from '@/context/store-context';
@@ -145,6 +146,18 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
       setNewImageUrl('');
     }
   }, [visible, editProduct]);
+
+  function handleSuggestionSelect(item: CatalogSuggestion) {
+    const newUnits = getSmartUnits(storeType, item.subCategory as SubCategory);
+    setForm((f) => ({
+      ...f,
+      name:        item.name,
+      category:    item.category as Category,
+      subCategory: item.subCategory as SubCategory,
+      unit:        newUnits.includes(item.unit) ? item.unit : (newUnits[0] ?? item.unit),
+      description: f.description || item.description,
+    }));
+  }
 
   function setCategory(cat: Category) {
     const firstSub  = SUB_CATEGORIES_BY_CATEGORY[cat][0].value as SubCategory;
@@ -294,15 +307,15 @@ export function ProductFormModal({ visible, storeType, onClose, onSaved, editPro
                 </Text>
               </View>
 
-              {/* Product Name */}
+              {/* Product Name — searchable from master catalog */}
               <View style={s.field}>
                 <Text style={s.label}>{t('product_form_name')} <Text style={s.required}>*</Text></Text>
-                <TextInput
-                  style={s.input}
-                  placeholder={t('product_form_name_ph')}
-                  placeholderTextColor={c.textFaint}
+                <Text style={s.fieldHint}>Type to search — select to auto-fill category & unit</Text>
+                <ProductNameSearch
                   value={form.name}
-                  onChangeText={(v) => setField('name', v)}
+                  onChange={(v) => setField('name', v)}
+                  onSelect={handleSuggestionSelect}
+                  placeholder={t('product_form_name_ph')}
                   maxLength={120}
                 />
               </View>

@@ -22,15 +22,17 @@ export function HarvestDivider() {
   );
 }
 
-type OrderStatusType = 'new' | 'accepted' | 'dispatched' | 'delivered' | 'cancelled';
+type OrderStatusType = 'new' | 'accepted' | 'packing' | 'dispatched' | 'delivered' | 'returns' | 'cancelled';
 
 export function OrderStatusBadge({ status }: { status: OrderStatusType }) {
   const config: Record<OrderStatusType, { label: string; bg: string; text: string; icon: string }> = {
-    new: { label: 'New Order', bg: '#dbeafe', text: '#1e40af', icon: '🆕' },
-    accepted: { label: 'Accepted', bg: '#fef3c7', text: '#92400e', icon: '✅' },
-    dispatched: { label: 'Dispatched', bg: '#e0e7ff', text: '#3730a3', icon: '🚚' },
-    delivered: { label: 'Delivered', bg: '#dcfce7', text: '#166534', icon: '✓' },
-    cancelled: { label: 'Cancelled', bg: '#fee2e2', text: '#991b1b', icon: '✕' },
+    new:       { label: 'New Order',  bg: '#dbeafe', text: '#1e40af', icon: '🆕' },
+    accepted:  { label: 'Accepted',   bg: '#fef3c7', text: '#92400e', icon: '✅' },
+    packing:   { label: 'Packing',    bg: '#fff7ed', text: '#c2410c', icon: '📦' },
+    dispatched:{ label: 'Dispatched', bg: '#e0e7ff', text: '#3730a3', icon: '🚚' },
+    delivered: { label: 'Delivered',  bg: '#dcfce7', text: '#166534', icon: '✓' },
+    returns:   { label: 'Return',     bg: '#fce7f3', text: '#9d174d', icon: '🔄' },
+    cancelled: { label: 'Cancelled',  bg: '#fee2e2', text: '#991b1b', icon: '✕' },
   };
   const c = config[status];
   return (

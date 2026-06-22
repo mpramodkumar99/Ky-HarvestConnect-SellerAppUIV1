@@ -315,3 +315,24 @@ export async function replyToReview(id: string, reply: string): Promise<Review> 
     body: JSON.stringify({ reply }),
   });
 }
+
+// ── Catalog item search (seller-only, for product name autocomplete) ──────────
+
+export interface CatalogSuggestion {
+  name:        string;
+  category:    Category;
+  subCategory: SubCategory;
+  unit:        string;
+  description: string;
+}
+
+export async function searchCatalogItems(q: string): Promise<CatalogSuggestion[]> {
+  if (!q || q.trim().length < 2) return [];
+  try {
+    const res  = await fetch(`${BASE_URL}/v1/catalog-items?q=${encodeURIComponent(q.trim())}&limit=8`);
+    const body = await res.json();
+    return (body.data ?? []) as CatalogSuggestion[];
+  } catch {
+    return [];
+  }
+}

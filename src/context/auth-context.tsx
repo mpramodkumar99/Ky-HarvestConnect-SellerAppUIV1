@@ -1,16 +1,27 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { type AuthSession, verifyToken, revokeSession } from '@/services/auth-api';
 
-// Production: replace this module-level store with expo-secure-store
-// import * as SecureStore from 'expo-secure-store';
-// const STORAGE_KEY = 'hc_seller_session';
-let _inMemorySession: AuthSession | null = null;
+const STORAGE_KEY = 'hc_seller_session';
 
 async function readStoredSession(): Promise<AuthSession | null> {
-  return _inMemorySession;
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as AuthSession;
+  } catch {
+    return null;
+  }
 }
+
 async function writeSession(s: AuthSession | null): Promise<void> {
-  _inMemorySession = s;
+  try {
+    if (s) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    } else {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+  } catch { /* storage unavailable — session will not persist across restarts */ }
 }
 
 interface AuthContextValue {
@@ -28,22 +39,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [session,         setSession]         = useState<AuthSession | null>(null);
 
-  // On mount — check if we have a stored session and it's still valid
+  // On mount — restore stored session; verify token in background so offline
+  // or slow AuthSvc doesn't force re-login on every cold start.
   useEffect(() => {
     async function bootstrap() {
       try {
         const stored = await readStoredSession();
-        if (stored) {
+        if (!stored) return;
+
+        // Optimistically restore the session immediately so the app opens fast.
+        setSession(stored);
+        setIsAuthenticated(true);
+
+        // Then validate in background; revoke locally only on explicit "invalid" reply.
+        try {
           const result = await verifyToken(stored.token);
-          if (result.valid) {
-            setSession(stored);
-            setIsAuthenticated(true);
-          } else {
+          if (!result.valid) {
             await writeSession(null);
+            setSession(null);
+            setIsAuthenticated(false);
           }
+        } catch {
+          // AuthSvc unreachable — keep the restored session so the seller can
+          // still use the app offline (orders and catalog are cached).
         }
       } catch {
-        // Network down or AuthSvc not running — treat as unauthenticated
+        // Corrupted AsyncStorage entry — start fresh.
       } finally {
         setInitializing(false);
       }
